@@ -239,13 +239,13 @@
 
   /* ===== サンプルWebサイト（メイン） ===== */
   .site {
-    border-radius: var(--radius); overflow: hidden; border: 1px solid var(--line);
+    border-radius: var(--radius); border: 1px solid var(--line);
     box-shadow: 0 12px 40px rgba(0,0,0,.35);
   }
   .site a { text-decoration: none; }
   .site-inner { font-size: 15px; line-height: 1.6; }
 
-  .site-nav { position: sticky; top: 0; z-index: 10; }
+  .site-nav { position: sticky; top: 0; z-index: 10; border-radius: var(--radius) var(--radius) 0 0; }
   .nav-inner {
     max-width: 1080px; margin: 0 auto; padding: 14px 24px;
     display: flex; align-items: center; justify-content: space-between; gap: 20px;
@@ -350,7 +350,7 @@
   .cta-inner p { margin: 0 0 26px; font-size: 15.5px; opacity: .85; }
   .cta-inner .site-btn.outline { border-color: currentColor; }
 
-  .site-footer { padding: 40px 24px 32px; }
+  .site-footer { padding: 40px 24px 32px; border-radius: 0 0 var(--radius) var(--radius); }
   .footer-inner { max-width: 1080px; margin: 0 auto; display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 28px; }
   @media (max-width: 720px) { .footer-inner { grid-template-columns: 1fr 1fr; } }
   .footer-brand p { font-size: 13px; opacity: .7; margin: 12px 0 0; max-width: 260px; }
@@ -977,7 +977,7 @@
     const textMuted = mixHex(text, bg, 0.42);
     const accentFg = bestTextOn(accent.hex);
     const secondaryFg = bestTextOn(secondary.hex);
-    const cardText = contrastRatio(surface, text) >= WCAG.AA_LARGE ? text : bestTextOn(surface);
+    const cardText = contrastRatio(surface, text) >= WCAG.AA ? text : bestTextOn(surface);
 
     return { bg, surface, surfaceAlt, text, textMuted, border, accent, accentFg, secondary, secondaryFg, cardText, list };
   }
