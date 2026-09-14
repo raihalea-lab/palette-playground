@@ -836,6 +836,8 @@
     if (last && last.hexes.join() === snapshot.hexes.join()) return; // 同一パレットは積まない
     state.history.unshift(snapshot);
     if (state.history.length > HISTORY_LIMIT) state.history.length = HISTORY_LIMIT;
+    // 再描画のあとに積まれる場合（色相スライダーを離したとき）もその場で表示に反映する
+    renderHistory();
   }
 
   function restoreHistory(index) {
@@ -1415,48 +1417,89 @@
     }
   }
 
-  function renderPalette() {
+  /** カードの骨組みを作る（値の入る部分は updateCard が埋める） */
+  function buildPalette() {
     el.palette.innerHTML = "";
     state.cards.forEach((card, index) => {
-      const d = colorDetails(card);
-      const fg = bestTextOn(d.hex);
-      const cw = contrastRatio(d.hex, "#ffffff");
-      const cb = contrastRatio(d.hex, "#000000");
-      const lw = wcagLevel(cw), lb = wcagLevel(cb);
-
       const node = document.createElement("article");
-      node.className = "card" + (card.locked ? " locked" : "");
+      node.className = "card";
       node.innerHTML = `
-        <button class="swatch" style="background:${d.hex};color:${fg}"
-                data-act="copy-hex" data-index="${index}"
-                title="${d.hex} をコピー" aria-label="${d.hex} をクリップボードにコピー"></button>
+        <button class="swatch" data-act="copy-hex" data-index="${index}"></button>
         <div class="card-body">
           <div class="card-top">
-            <span class="hex">${d.hex.toUpperCase()}</span>
-            <span class="tone-badge">${d.toneLabel}</span>
+            <span class="hex"></span>
+            <span class="tone-badge"></span>
           </div>
-          <div class="meta">${d.hsl}</div>
+          <div class="meta"></div>
           <div class="contrast">
-            <span class="cbadge ${lw.cls}" title="白文字とのコントラスト比">白 ${cw.toFixed(1)} <span class="lvl">${lw.label}</span></span>
-            <span class="cbadge ${lb.cls}" title="黒文字とのコントラスト比">黒 ${cb.toFixed(1)} <span class="lvl">${lb.label}</span></span>
+            <span class="cbadge" title="白文字とのコントラスト比"></span>
+            <span class="cbadge" title="黒文字とのコントラスト比"></span>
           </div>
           <div class="adjust">
             <label><span>S</span>
-              <input type="range" min="0" max="100" step="1" value="${round(card.s)}"
+              <input type="range" min="0" max="100" step="1"
                      data-act="adjust-s" data-index="${index}" aria-label="彩度を調整">
-              <span>${round(card.s)}%</span></label>
+              <span class="adjust-value"></span></label>
             <label><span>L</span>
-              <input type="range" min="0" max="100" step="1" value="${round(card.l)}"
+              <input type="range" min="0" max="100" step="1"
                      data-act="adjust-l" data-index="${index}" aria-label="明度を調整">
-              <span>${round(card.l)}%</span></label>
+              <span class="adjust-value"></span></label>
           </div>
           <div class="card-actions">
-            <button class="btn small" data-act="toggle-lock" data-index="${index}"
-                    aria-pressed="${card.locked}">${card.locked ? "🔒 ロック中" : "🔓 ロック"}</button>
+            <button class="btn small" data-act="toggle-lock" data-index="${index}"></button>
           </div>
         </div>`;
       el.palette.appendChild(node);
     });
+  }
+
+  /** カード 1 枚の表示を、DOM を作り直さずに更新する */
+  function updateCard(index) {
+    const node = el.palette.children[index];
+    const card = state.cards[index];
+    if (!node || !card) return;
+    const d = colorDetails(card);
+    const fg = bestTextOn(d.hex);
+    const cw = contrastRatio(d.hex, "#ffffff");
+    const cb = contrastRatio(d.hex, "#000000");
+    const lw = wcagLevel(cw), lb = wcagLevel(cb);
+
+    node.classList.toggle("locked", card.locked);
+
+    const swatch = node.querySelector(".swatch");
+    swatch.style.background = d.hex;
+    swatch.style.color = fg;
+    swatch.title = `${d.hex} をコピー`;
+    swatch.setAttribute("aria-label", `${d.hex} をクリップボードにコピー`);
+
+    node.querySelector(".hex").textContent = d.hex.toUpperCase();
+    node.querySelector(".tone-badge").textContent = d.toneLabel;
+    node.querySelector(".meta").textContent = d.hsl;
+
+    const badges = node.querySelectorAll(".cbadge");
+    badges[0].className = `cbadge ${lw.cls}`;
+    badges[0].innerHTML = `白 ${cw.toFixed(1)} <span class="lvl">${lw.label}</span>`;
+    badges[1].className = `cbadge ${lb.cls}`;
+    badges[1].innerHTML = `黒 ${cb.toFixed(1)} <span class="lvl">${lb.label}</span>`;
+
+    // スライダーは値だけを合わせる（要素を作り直すとドラッグが途切れるため）
+    const sliders = node.querySelectorAll("input[type=range]");
+    const values = node.querySelectorAll(".adjust-value");
+    sliders[0].value = String(round(card.s));
+    sliders[1].value = String(round(card.l));
+    values[0].textContent = round(card.s) + "%";
+    values[1].textContent = round(card.l) + "%";
+
+    const lock = node.querySelector("[data-act='toggle-lock']");
+    lock.setAttribute("aria-pressed", String(card.locked));
+    lock.textContent = card.locked ? "🔒 ロック中" : "🔓 ロック";
+  }
+
+  function renderPalette() {
+    // 枚数が変わったときだけ作り直す。ドラッグ中のスライダーを壊さないため、
+    // それ以外は既存のカードの表示だけを更新する。
+    if (el.palette.children.length !== state.cards.length) buildPalette();
+    state.cards.forEach((_, index) => updateCard(index));
   }
 
   function renderExportTabs() {
@@ -1637,7 +1680,7 @@
         copyText(cardHex(state.cards[index]).toUpperCase(), `${cardHex(state.cards[index]).toUpperCase()} をコピーしました`);
       } else if (target.dataset.act === "toggle-lock") {
         state.cards[index].locked = !state.cards[index].locked;
-        renderPalette();
+        updateCard(index);
       }
     });
 
@@ -1650,14 +1693,11 @@
       if (target.dataset.act === "adjust-s") state.cards[index].s = value;
       else if (target.dataset.act === "adjust-l") state.cards[index].l = value;
       else return;
-      renderPalette();
+      updateCard(index);
       renderToneViz();
       renderWheelViz();
       renderSite();
       renderExportTabs();
-      // 調整中のスライダーにフォーカスを戻す（再描画で失われるため）
-      const again = el.palette.querySelector(`[data-act="${target.dataset.act}"][data-index="${index}"]`);
-      if (again) again.focus();
     });
 
     el.history.addEventListener("click", (e) => {
