@@ -858,6 +858,8 @@
     if (last && last.hexes.join() === snapshot.hexes.join()) return; // 同一パレットは積まない
     state.history.unshift(snapshot);
     if (state.history.length > HISTORY_LIMIT) state.history.length = HISTORY_LIMIT;
+    // 再描画のあとに積まれる場合（ドラッグ解放・ピンのクリック）もその場で表示に反映する
+    renderHistory();
   }
 
   function restoreHistory(index) {
