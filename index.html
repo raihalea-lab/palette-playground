@@ -1053,6 +1053,7 @@
     lTop: 98, lBottom: 2,      // 上端・下端の明度
   };
   const RING_MIN_S = 14;       // リングが完全な灰色にならないようにする下限彩度
+  const DRAG_THRESHOLD_PX = 4; // これ以上動いたらドラッグとみなす（タップと区別する）
 
   // 真上を 0° とし、時計回りに角度を測る（PCCS 8:Y が真上）
   const toRad = (deg) => ((deg - 90) * Math.PI) / 180;
@@ -1512,22 +1513,64 @@
 
   /**
    * 図のドラッグ操作を共通化する。
-   * ピンの上で押した場合はピン自身の click に任せ、ここでは処理しない。
+   * ピンの上で押した場合も、しきい値を超えて動かせばドラッグとして扱う。
+   * 動かさずに離したときだけ、ピン自身の click（PCCS の基準点へのスナップ）に任せる。
    */
   function bindStage(stage, onMove) {
-    let dragging = false;
+    let pointerId = null;      // 追跡中のポインタ
+    let fromPin = false;       // ピンの上で押し始めたか
+    let moved = false;         // しきい値を超えて動いたか
+    let start = null;          // 押し始めた位置（px）
+    let suppressClick = false; // ドラッグ後の click でピンが選び直されるのを防ぐ
+
     stage.addEventListener("pointerdown", (e) => {
-      if (e.button !== 0 || e.target.closest(".pin")) return;
-      if (!onMove(stagePoint(stage, e))) return;
-      dragging = true;
-      try { stage.setPointerCapture(e.pointerId); } catch (_) {}
-      e.preventDefault();
+      if (e.button !== 0 || pointerId !== null) return;
+      suppressClick = false;
+      const onPin = !!e.target.closest(".pin");
+      // ピン以外を押したときは、その場で色を反映する（図の外側なら何もしない）
+      if (!onPin && !onMove(stagePoint(stage, e))) return;
+      pointerId = e.pointerId;
+      fromPin = onPin;
+      moved = false;
+      start = { x: e.clientX, y: e.clientY };
+      if (!onPin) {
+        // ピンの上で押した場合はまだ捕捉しない（タップなら click を活かすため）
+        try { stage.setPointerCapture(e.pointerId); } catch (_) {}
+        e.preventDefault();
+      }
     });
-    stage.addEventListener("pointermove", (e) => { if (dragging) onMove(stagePoint(stage, e)); });
-    const finish = () => { if (dragging) { dragging = false; pushHistory(); } };
+
+    stage.addEventListener("pointermove", (e) => {
+      if (e.pointerId !== pointerId) return;
+      if (!moved) {
+        if (Math.hypot(e.clientX - start.x, e.clientY - start.y) < DRAG_THRESHOLD_PX) return;
+        moved = true;
+        if (fromPin) {
+          // 動き始めた時点でドラッグに切り替える
+          suppressClick = true;
+          try { stage.setPointerCapture(e.pointerId); } catch (_) {}
+        }
+      }
+      onMove(stagePoint(stage, e));
+    });
+
+    const finish = (e) => {
+      if (pointerId === null || (e && e.pointerId !== pointerId)) return;
+      pointerId = null;
+      if (fromPin && !moved) return; // ピンをタップしただけ：選択も履歴も click 側に任せる
+      pushHistory();
+    };
     stage.addEventListener("pointerup", finish);
     stage.addEventListener("pointercancel", finish);
     stage.addEventListener("lostpointercapture", finish);
+
+    // ドラッグ直後の click がピンに届くと、つかんだ位置へ戻ってしまうので止める
+    stage.addEventListener("click", (e) => {
+      if (!suppressClick) return;
+      suppressClick = false;
+      e.stopPropagation();
+      e.preventDefault();
+    }, true);
   }
 
   /** 色相を変更して再描画する（ドラッグ中は履歴に積まない） */
