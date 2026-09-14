@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Hue &amp; Tone Palette Playground</title>
-<meta name="description" content="色相（Hue）とトーン（Tone）をベースにした配色ツール。ランダム生成・配色ルール・コントラスト比チェック・エクスポートに対応。">
+<meta name="description" content="PCCS の色相環とトーンマップを並べて表示し、どちらもクリックで操作できる配色ツール。2 つの図の組み合わせですべての色を指定でき、配色ルール・コントラスト比チェック・エクスポートに対応。">
 <style>
   /* ===== ツール自体の配色はニュートラルなダーク基調（生成色の評価を妨げない） ===== */
   :root {
@@ -96,48 +96,87 @@
     border-radius: var(--radius-sm); padding: 8px 10px;
   }
 
-  /* ===== 色相スライダー ===== */
-  .hue-slider { width: 100%; -webkit-appearance: none; appearance: none; background: transparent; margin: 0; }
-  .hue-slider::-webkit-slider-runnable-track {
-    height: 20px; border-radius: var(--radius-sm); border: 1px solid var(--line-strong);
-    background: linear-gradient(to right,
-      hsl(0 90% 50%), hsl(60 90% 50%), hsl(120 90% 50%),
-      hsl(180 90% 50%), hsl(240 90% 50%), hsl(300 90% 50%), hsl(360 90% 50%));
+  /* =========================================================================
+   * 2 つの図（色相環 × トーンマップ）
+   *   色相環 = 色相（H）／トーンマップ = 彩度（S）× 明度（L）
+   *   この 2 図の組み合わせで HSL 色空間のすべての色を指定できる。
+   * ========================================================================= */
+  .figures {
+    display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+    gap: 26px; align-items: start;
   }
-  .hue-slider::-moz-range-track {
-    height: 20px; border-radius: var(--radius-sm); border: 1px solid var(--line-strong);
-    background: linear-gradient(to right,
-      hsl(0 90% 50%), hsl(60 90% 50%), hsl(120 90% 50%),
-      hsl(180 90% 50%), hsl(240 90% 50%), hsl(300 90% 50%), hsl(360 90% 50%));
-  }
-  .hue-slider::-webkit-slider-thumb {
-    -webkit-appearance: none; appearance: none;
-    width: 16px; height: 28px; margin-top: -5px;
-    border-radius: 4px; background: #fff; border: 2px solid #101215; cursor: pointer;
-    box-shadow: 0 1px 4px rgba(0,0,0,.6);
-  }
-  .hue-slider::-moz-range-thumb {
-    width: 14px; height: 26px; border-radius: 4px;
-    background: #fff; border: 2px solid #101215; cursor: pointer;
-  }
+  @media (max-width: 900px) { .figures { grid-template-columns: 1fr; gap: 30px; } }
 
-  /* ===== トーンマップ（彩度 × 明度の二次元配置） ===== */
-  .tone-map {
-    display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; max-width: 620px;
+  .figure { min-width: 0; }
+  .figure-head {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 10px; flex-wrap: wrap; margin-bottom: 9px;
   }
-  .tone-cell {
-    position: relative; border: 2px solid transparent; border-radius: var(--radius-sm);
-    padding: 0; cursor: pointer; aspect-ratio: 2.6 / 1; min-height: 40px; max-height: 58px;
-    display: flex; flex-direction: column; align-items: center; justify-content: center;
-    gap: 1px; overflow: hidden; background: #000;
+  .figure-title { font-size: 13px; font-weight: 700; letter-spacing: .04em; }
+  .figure-title small { display: block; font-weight: 400; font-size: 11px; color: var(--fg-dim); letter-spacing: 0; }
+  .figure-readout {
+    font-family: var(--mono); font-size: 12.5px; color: var(--fg);
+    background: var(--bg-elev-2); border: 1px solid var(--line-strong);
+    border-radius: 999px; padding: 3px 11px; white-space: nowrap;
   }
-  .tone-cell .tone-abbr { font-family: var(--mono); font-size: 11px; font-weight: 700; }
-  .tone-cell .tone-name { font-size: 10.5px; line-height: 1.1; }
-  .tone-cell[aria-pressed="true"] { border-color: #fff; box-shadow: 0 0 0 2px rgba(0,0,0,.55); }
-  .tone-axis { font-size: 10.5px; color: var(--fg-dim); display: flex; justify-content: space-between; margin-top: 6px; max-width: 620px; }
+  .figure-foot {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 10px; flex-wrap: wrap; margin-top: 9px;
+  }
+  .figure-note { font-size: 11px; color: var(--fg-dim); margin: 0; line-height: 1.5; flex: 1 1 200px; }
+
+  /* 図の本体（canvas で描画し、上に選択用のピンを重ねる） */
+  .stage {
+    position: relative; width: 100%; margin: 0 auto;
+    touch-action: none; -webkit-user-select: none; user-select: none;
+  }
+  .stage canvas { display: block; width: 100%; height: 100%; cursor: crosshair; }
+  .wheel-stage { aspect-ratio: 1 / 1; max-width: 460px; }
+  .plane-stage { aspect-ratio: 1.22 / 1; }
+  .stage.muted { opacity: .42; }
+  .stage.muted canvas { cursor: default; }
+
+  /* 図の上に重ねる基準点（PCCS の 24 色相 / 12 トーン / 5 無彩色） */
+  .pin {
+    position: absolute; transform: translate(-50%, -50%); padding: 0;
+    border-radius: 50%; cursor: pointer; background: transparent;
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--mono); font-weight: 700; line-height: 1;
+    transition: box-shadow .12s, transform .12s;
+  }
+  .pin:hover { z-index: 5; transform: translate(-50%, -50%) scale(1.12); }
+  .pin[aria-pressed="true"] {
+    box-shadow: 0 0 0 2.5px #fff, 0 0 0 5px rgba(0,0,0,.7);
+    z-index: 6; transform: translate(-50%, -50%) scale(1.1);
+  }
+  .pin:focus-visible { outline: 2px solid #fff; outline-offset: 2px; z-index: 7; }
+
+  .hue-pin {
+    width: 8.4%; aspect-ratio: 1; font-size: 10px;
+    border: 1px solid rgba(0,0,0,.35);
+  }
+  .tone-pin {
+    width: 11.4%; aspect-ratio: 1; font-size: 11.5px; flex-direction: column; gap: 1px;
+    border: 1.5px solid rgba(255,255,255,.6); background: transparent;
+    text-shadow: 0 0 3px rgba(0,0,0,.9), 0 1px 2px rgba(0,0,0,.7);
+  }
+  .tone-pin.on-light {
+    border-color: rgba(0,0,0,.45);
+    text-shadow: 0 0 3px rgba(255,255,255,.95), 0 1px 2px rgba(255,255,255,.8);
+  }
+  .neutral-pin { width: 8.6%; font-size: 9.5px; }
+
+  .plane-wrap { position: relative; padding: 0 0 17px 17px; }
+  .axis-label {
+    position: absolute; font-size: 10px; letter-spacing: .04em;
+    color: var(--fg-dim); pointer-events: none; white-space: nowrap;
+  }
+  .axis-label.x { left: 50%; bottom: 0; transform: translateX(-50%); }
+  .axis-label.y { left: 0; top: 50%; transform: translateY(-50%); writing-mode: vertical-rl; }
 
   .row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
   @media (max-width: 620px) { .row-2 { grid-template-columns: 1fr; } }
+
 
   /* ===== パレット ===== */
   .palette { display: grid; grid-template-columns: repeat(auto-fit, minmax(172px, 1fr)); gap: 14px; }
@@ -252,7 +291,7 @@
   <header class="site-header">
     <div>
       <h1>Hue &amp; Tone Palette Playground</h1>
-      <p>色相とトーンから配色をつくる · <span class="kbd">Space</span> でランダム生成</p>
+      <p>色相環とトーンマップをクリックして配色をつくる · <span class="kbd">Space</span> でランダム生成</p>
     </div>
     <div class="header-actions">
       <button class="btn primary" id="btn-random" type="button">🎲 ランダム生成</button>
@@ -260,23 +299,67 @@
     </div>
   </header>
 
+  <!-- ===== 2 つの図（色相環 × トーンマップ） ===== -->
+  <section class="panel" aria-labelledby="ttl-figures">
+    <h2 id="ttl-figures">色相環 × トーンマップ</h2>
+    <p class="figure-note" style="margin:-6px 0 16px; font-size:12px">
+      左の<strong>色相環</strong>が色相（H）、右の<strong>トーンマップ</strong>が彩度（S）× 明度（L）を受け持ちます。
+      2 つの図の組み合わせで HSL 色空間のすべての色を指定でき、色相をもたない色はトーンマップ左端の<strong>無彩色の列</strong>で選べます。
+      どちらの図もクリック（ドラッグ）で色が変わります。
+    </p>
+
+    <div class="figures">
+      <!-- 色相環 -->
+      <div class="figure">
+        <div class="figure-head">
+          <span class="figure-title">色相環<small>PCCS 24 色相 ＋ 連続した色相リング</small></span>
+          <span class="figure-readout" id="hue-readout">–</span>
+        </div>
+        <div class="stage wheel-stage" id="wheel-stage">
+          <canvas id="wheel-canvas" aria-hidden="true"></canvas>
+          <div id="hue-pins"></div>
+        </div>
+        <div class="figure-foot">
+          <p class="figure-note">
+            外周のリングは連続した色相（クリックで任意の角度）、内側の丸は PCCS の色相番号。
+            中心から伸びる線は、現在のパレットが使っている色相です。
+          </p>
+          <label class="lock" title="ランダム生成で色相を変更しない">
+            <input type="checkbox" id="lock-hue"> 色相を固定
+          </label>
+        </div>
+      </div>
+
+      <!-- トーンマップ -->
+      <div class="figure">
+        <div class="figure-head">
+          <span class="figure-title">トーンマップ<small>PCCS 12 トーン ＋ 無彩色 5 段階</small></span>
+          <span class="figure-readout" id="tone-readout">–</span>
+        </div>
+        <div class="plane-wrap">
+          <div class="stage plane-stage" id="plane-stage">
+            <canvas id="plane-canvas" aria-hidden="true"></canvas>
+            <div id="tone-pins"></div>
+          </div>
+          <span class="axis-label x">彩度（右ほど高い）</span>
+          <span class="axis-label y">明度（上ほど明るい）</span>
+        </div>
+        <div class="figure-foot">
+          <p class="figure-note">
+            面全体が「彩度 × 明度」の平面で、どこをクリックしても色を選べます。
+            丸は PCCS のトーン位置、左端の列は無彩色（W／ltGy／mGy／dkGy／Bk）。
+          </p>
+          <label class="lock" title="ランダム生成でトーンを変更しない">
+            <input type="checkbox" id="lock-tone"> トーンを固定
+          </label>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- ===== コントロール ===== -->
   <section class="panel" aria-labelledby="ttl-controls">
     <h2 id="ttl-controls">設定</h2>
-
-    <div class="field">
-      <div class="field-head">
-        <span class="field-label">基準色相（Hue）</span>
-        <span>
-          <span class="field-value" id="hue-value">0°</span>
-          <label class="lock" title="ランダム生成で色相を変更しない">
-            <input type="checkbox" id="lock-hue"> 固定
-          </label>
-        </span>
-      </div>
-      <input type="range" class="hue-slider" id="hue" min="0" max="360" step="1" value="0"
-             aria-label="基準色相（0〜360度）">
-    </div>
 
     <div class="row-2">
       <div class="field">
@@ -299,20 +382,6 @@
                style="width:100%; accent-color: var(--accent);" aria-label="色数（2〜6）">
         <p class="meta" style="margin:7px 0 0">2 〜 6 色</p>
       </div>
-    </div>
-
-    <div class="field">
-      <div class="field-head">
-        <span class="field-label">トーン（彩度 × 明度）</span>
-        <span>
-          <span class="field-value" id="tone-value"></span>
-          <label class="lock" title="ランダム生成でトーンを変更しない">
-            <input type="checkbox" id="lock-tone"> 固定
-          </label>
-        </span>
-      </div>
-      <div class="tone-map" id="tone-map" role="group" aria-label="トーンマップ"></div>
-      <div class="tone-axis"><span>← 低彩度</span><span>上：明るい／下：暗い</span><span>高彩度 →</span></div>
     </div>
   </section>
 
@@ -370,13 +439,8 @@
   // 色相ごとの見た目の明るさの差を補正する強さ（0 で補正なし）
   const HUE_COMP_STRENGTH = 9;
 
-  // トーン範囲内での値の散らし方（先頭ほど中央寄り＝トーンの印象を保つ）
+  // トーン中心からの値の散らし方（先頭は必ず中心＝2 つの図で選んだ色そのもの）
   const SPREAD_STEPS = [0.5, 0.18, 0.82, 0.34, 0.66, 0.04];
-
-  // トーン判定時の重み（明度のほうが印象に効くため大きめ）
-  const TONE_WEIGHT_S = 1;
-  const TONE_WEIGHT_L = 1.4;
-  const TONE_EXACT_DISTANCE = 7; // これを超えたら「≈」付きで近似表示
 
   /* =========================================================================
    * 2. 色変換ユーティリティ（HEX / RGB / HSL）
@@ -468,29 +532,124 @@
   const bestTextOn = (hex) => (contrastRatio(hex, "#ffffff") >= contrastRatio(hex, "#000000") ? "#ffffff" : "#000000");
 
   /* =========================================================================
-   * 3. トーン定義（彩度レンジ・明度レンジのテーブル。すべてここで一元管理）
-   *    col / row はトーンマップ上の位置（col: 低彩度→高彩度, row: 明→暗）
+   * 3. PCCS の色相（24 色相）
+   *    色相環はこのテーブルの順に並ぶ。h は PCCS 色相を HSL に置き換えたときの角度で、
+   *    知覚上の間隔に合わせて不均等（黄〜橙は細かく、緑〜青は粗く）に配置している。
+   * ========================================================================= */
+  const PCCS_HUES = [
+    { n: 1,  code: "pR", jp: "紫みの赤",   h: 345 },
+    { n: 2,  code: "R",  jp: "赤",         h: 358 },
+    { n: 3,  code: "yR", jp: "黄みの赤",   h: 10 },
+    { n: 4,  code: "rO", jp: "赤みの橙",   h: 18 },
+    { n: 5,  code: "O",  jp: "橙",         h: 26 },
+    { n: 6,  code: "yO", jp: "黄みの橙",   h: 35 },
+    { n: 7,  code: "rY", jp: "赤みの黄",   h: 44 },
+    { n: 8,  code: "Y",  jp: "黄",         h: 53 },
+    { n: 9,  code: "gY", jp: "緑みの黄",   h: 62 },
+    { n: 10, code: "YG", jp: "黄緑",       h: 78 },
+    { n: 11, code: "yG", jp: "黄みの緑",   h: 96 },
+    { n: 12, code: "G",  jp: "緑",         h: 125 },
+    { n: 13, code: "bG", jp: "青みの緑",   h: 152 },
+    { n: 14, code: "BG", jp: "青緑",       h: 170 },
+    { n: 15, code: "BG", jp: "青緑",       h: 180 },
+    { n: 16, code: "gB", jp: "緑みの青",   h: 190 },
+    { n: 17, code: "B",  jp: "青",         h: 200 },
+    { n: 18, code: "B",  jp: "青",         h: 210 },
+    { n: 19, code: "pB", jp: "紫みの青",   h: 222 },
+    { n: 20, code: "V",  jp: "青紫",       h: 236 },
+    { n: 21, code: "bP", jp: "青みの紫",   h: 258 },
+    { n: 22, code: "P",  jp: "紫",         h: 275 },
+    { n: 23, code: "rP", jp: "赤みの紫",   h: 295 },
+    { n: 24, code: "RP", jp: "赤紫",       h: 320 },
+  ];
+
+  // 色相番号 ↔ HSL 角度を線形補間するための、巻き戻さない（単調増加の）角度列
+  const HUE_UNWRAPPED = (() => {
+    const out = [PCCS_HUES[0].h];
+    for (let i = 1; i < PCCS_HUES.length; i++) {
+      let v = PCCS_HUES[i].h;
+      while (v < out[i - 1]) v += HUE_MAX;
+      out.push(v);
+    }
+    out.push(out[0] + HUE_MAX); // 24 番の次は 1 番へ戻る
+    return out;
+  })();
+
+  /** PCCS 色相番号（1〜25 の実数。小数可）→ HSL の色相角度 */
+  function pccsToHue(n) {
+    const t = ((n - 1) % 24 + 24) % 24;
+    const i = Math.floor(t);
+    return normalizeHue(lerp(HUE_UNWRAPPED[i], HUE_UNWRAPPED[i + 1], t - i));
+  }
+
+  /** HSL の色相角度 → PCCS 色相番号（1〜25 未満の実数） */
+  function hueToPccs(h) {
+    let v = normalizeHue(h);
+    while (v < HUE_UNWRAPPED[0]) v += HUE_MAX;
+    while (v >= HUE_UNWRAPPED[0] + HUE_MAX) v -= HUE_MAX;
+    for (let i = 0; i < 24; i++) {
+      if (v <= HUE_UNWRAPPED[i + 1]) {
+        const span = HUE_UNWRAPPED[i + 1] - HUE_UNWRAPPED[i];
+        return 1 + i + (span === 0 ? 0 : (v - HUE_UNWRAPPED[i]) / span);
+      }
+    }
+    return 1;
+  }
+
+  /** 色相角度に最も近い PCCS 色相（丸めた番号のテーブル要素） */
+  const nearestHue = (h) => PCCS_HUES[(Math.round(hueToPccs(h)) - 1) % 24];
+
+  /* =========================================================================
+   * 4. PCCS のトーン（12 トーン）と無彩色（5 段階）
+   *    s / l はトーンマップ上の座標そのもの（横軸 = 彩度、縦軸 = 明度）。
+   *    トーンマップは「彩度 × 明度」の平面全体が選択対象で、この 12 点は目安。
    * ========================================================================= */
   const TONES = [
-    { id: "pale",    name: "ペール",       abbr: "p",  s: [22, 34],  l: [84, 90], col: 2, row: 1 },
-    { id: "light",   name: "ライト",       abbr: "lt", s: [44, 58],  l: [70, 78], col: 3, row: 2 },
-    { id: "soft",    name: "ソフト",       abbr: "sf", s: [40, 52],  l: [58, 66], col: 3, row: 3 },
-    { id: "bright",  name: "ブライト",     abbr: "b",  s: [78, 92],  l: [58, 66], col: 4, row: 3 },
-    { id: "grayish", name: "グレイッシュ", abbr: "g",  s: [10, 20],  l: [46, 56], col: 1, row: 4 },
-    { id: "dull",    name: "ダル",         abbr: "d",  s: [32, 44],  l: [44, 54], col: 2, row: 4 },
-    { id: "strong",  name: "ストロング",   abbr: "s",  s: [66, 80],  l: [44, 52], col: 3, row: 4 },
-    { id: "vivid",   name: "ビビッド",     abbr: "v",  s: [92, 100], l: [46, 54], col: 4, row: 4 },
-    { id: "dark",    name: "ダーク",       abbr: "dk", s: [55, 70],  l: [20, 28], col: 2, row: 5 },
-    { id: "deep",    name: "ディープ",     abbr: "dp", s: [82, 96],  l: [28, 36], col: 4, row: 5 },
+    { id: "p",   abbr: "p",   name: "ペール",             en: "pale",           s: 30,  l: 87 },
+    { id: "lt",  abbr: "lt",  name: "ライト",             en: "light",          s: 58,  l: 78 },
+    { id: "b",   abbr: "b",   name: "ブライト",           en: "bright",         s: 86,  l: 70 },
+    { id: "ltg", abbr: "ltg", name: "ライトグレイッシュ", en: "light grayish",  s: 18,  l: 74 },
+    { id: "sf",  abbr: "sf",  name: "ソフト",             en: "soft",           s: 46,  l: 64 },
+    { id: "v",   abbr: "v",   name: "ビビッド",           en: "vivid",          s: 100, l: 52 },
+    { id: "s",   abbr: "s",   name: "ストロング",         en: "strong",         s: 78,  l: 54 },
+    { id: "d",   abbr: "d",   name: "ダル",               en: "dull",           s: 42,  l: 50 },
+    { id: "g",   abbr: "g",   name: "グレイッシュ",       en: "grayish",        s: 15,  l: 52 },
+    { id: "dp",  abbr: "dp",  name: "ディープ",           en: "deep",           s: 86,  l: 36 },
+    { id: "dk",  abbr: "dk",  name: "ダーク",             en: "dark",           s: 56,  l: 28 },
+    { id: "dkg", abbr: "dkg", name: "ダークグレイッシュ", en: "dark grayish",   s: 16,  l: 26 },
   ];
-  const TONE_MAP_COLS = 4;
-  const TONE_MAP_ROWS = 5;
+
+  // 無彩色（色相をもたない色）。トーンマップ左端の列に並べる。
+  const NEUTRALS = [
+    { id: "W",    abbr: "W",    name: "白",       l: 95 },
+    { id: "ltGy", abbr: "ltGy", name: "明るい灰", l: 76 },
+    { id: "mGy",  abbr: "mGy",  name: "中位の灰", l: 54 },
+    { id: "dkGy", abbr: "dkGy", name: "暗い灰",   l: 32 },
+    { id: "Bk",   abbr: "Bk",   name: "黒",       l: 8 },
+  ];
+
+  // 旧バージョンの共有 URL（tone=vivid など）を新しいトーン ID に読み替える
+  const LEGACY_TONES = {
+    pale: "p", light: "lt", soft: "sf", bright: "b", grayish: "g",
+    dull: "d", strong: "s", vivid: "v", dark: "dk", deep: "dp",
+  };
+
+  // トーンマップ上での色の散らし幅（トーンの印象を保てる範囲）
+  const TONE_SPREAD_S = 9;
+  const TONE_SPREAD_L = 6;
+  const MONO_SPREAD_L = 20;
+
+  // トーン判定時の重み（明度のほうが印象に効くため大きめ）
+  const TONE_WEIGHT_S = 1;
+  const TONE_WEIGHT_L = 1.4;
+  const TONE_EXACT_DISTANCE = 9;  // これを超えたら「≈」付きで近似表示
+  const ACHROMATIC_S = 7;         // これ以下の彩度は無彩色として扱う
 
   // トーンオントーン（同一色相・トーン違い）で使う、明度順のトーン梯子
-  const TONE_LADDER = ["pale", "light", "soft", "dull", "strong", "deep", "dark"];
+  const TONE_LADDER = ["p", "lt", "sf", "d", "s", "dp", "dk"];
 
-  const getTone = (id) => TONES.find((t) => t.id === id) || TONES[0];
-  const toneCenter = (tone) => ({ s: (tone.s[0] + tone.s[1]) / 2, l: (tone.l[0] + tone.l[1]) / 2 });
+  const getTone = (id) => TONES.find((t) => t.id === id) || TONES[5];
+  const getNeutral = (id) => NEUTRALS.find((t) => t.id === id) || NEUTRALS[2];
 
   /**
    * 同じ HSL 明度でも色相によって明るさの印象が変わる（黄は明るく、青は暗く見える）。
@@ -502,31 +661,28 @@
     return (0.35 - lum) * HUE_COMP_STRENGTH;
   }
 
-  /**
-   * トーンの範囲内から index 番目の彩度・明度を決める（色相補正込み）。
-   * 補正後も必ずトーンのレンジ内に収め、色相が変わってもトーンの印象を保つ。
-   */
-  function toneColor(hue, tone, index) {
-    const t = SPREAD_STEPS[index % SPREAD_STEPS.length];
-    const s = clamp(lerp(tone.s[0], tone.s[1], t), tone.s[0], tone.s[1]);
-    const l = clamp(lerp(tone.l[0], tone.l[1], t) + hueLightnessCompensation(hue), tone.l[0], tone.l[1]);
-    return { h: normalizeHue(hue), s, l };
-  }
-
-  /** 彩度・明度から最も近いトーンを判定する（カード上で微調整した色のラベル用） */
+  /** 彩度・明度から最も近いトーン（無彩色を含む）を判定する */
   function classifyTone(s, l) {
+    if (s <= ACHROMATIC_S) {
+      let best = NEUTRALS[0], bestDist = Infinity;
+      for (const n of NEUTRALS) {
+        const dist = Math.abs(n.l - l);
+        if (dist < bestDist) { bestDist = dist; best = n; }
+      }
+      const exact = bestDist <= 6;
+      return { tone: best, achromatic: true, exact, label: (exact ? "" : "≈") + best.name };
+    }
     let best = TONES[0], bestDist = Infinity;
     for (const tone of TONES) {
-      const ds = s < tone.s[0] ? tone.s[0] - s : s > tone.s[1] ? s - tone.s[1] : 0;
-      const dl = l < tone.l[0] ? tone.l[0] - l : l > tone.l[1] ? l - tone.l[1] : 0;
-      const dist = Math.hypot(ds * TONE_WEIGHT_S, dl * TONE_WEIGHT_L);
+      const dist = Math.hypot((s - tone.s) * TONE_WEIGHT_S, (l - tone.l) * TONE_WEIGHT_L);
       if (dist < bestDist) { bestDist = dist; best = tone; }
     }
-    return { tone: best, exact: bestDist <= TONE_EXACT_DISTANCE, label: (bestDist <= TONE_EXACT_DISTANCE ? "" : "≈") + best.name };
+    const exact = bestDist <= TONE_EXACT_DISTANCE;
+    return { tone: best, achromatic: false, exact, label: (exact ? "" : "≈") + best.name };
   }
 
   /* =========================================================================
-   * 4. 配色ルール（基準色相から他の色相を算出する）
+   * 5. 配色ルール（基準色相から他の色相を算出する）
    *    offsets: 色相のオフセット（度）。mode 付きは特殊処理。
    * ========================================================================= */
   const RULES = [
@@ -541,7 +697,7 @@
     { id: "triadic",       name: "トライアド（Triadic ±120°）",   offsets: [0, 120, 240, 60, 180, 300],
       desc: "色相環を三等分（±120°）する、鮮やかでバランスの取れた配色。" },
     { id: "tetradic",      name: "テトラード（Tetradic 90°）",    offsets: [0, 90, 180, 270, 45, 225],
-      desc: "色相環を四等分（+90/180/270°）する、変化に富んだ配色。" },
+      desc: "色相環を四等分（+90 / 180 / 270°）する、変化に富んだ配色。" },
     { id: "toneOnTone",    name: "トーンオントーン（同一色相）",   mode: "toneOnTone",
       desc: "同一色相でトーン（明度差）を変えて重ねる、統一感のある配色。" },
     { id: "toneInTone",    name: "トーンイントーン（同一トーン）", mode: "toneInTone",
@@ -563,61 +719,84 @@
       }
     }
     // 梯子を使い切った場合は明度順に並べたうえで先頭から繰り返す
-    picked.sort((a, b) => toneCenter(b).l - toneCenter(a).l);
+    picked.sort((a, b) => b.l - a.l);
     while (picked.length < count) picked.push(picked[picked.length % ladder.length]);
     return picked;
   }
 
   /* =========================================================================
-   * 5. パレット生成
+   * 6. パレット生成
+   *    先頭の色は必ず「2 つの図で選んだ色そのもの」になるようにする。
    * ========================================================================= */
-  /** 設定（基準色相・トーン・ルール・色数）から HSL の配列をつくる */
-  function generatePalette({ baseHue, toneId, ruleId, count }) {
+  /** i 番目の色をトーン中心からどれだけずらすか（-1 〜 +1。0 番目は必ず 0） */
+  const spreadT = (i) => (SPREAD_STEPS[i % SPREAD_STEPS.length] - 0.5) * 2;
+
+  /**
+   * トーン（彩度・明度の中心）と色相から i 番目の色をつくる。
+   * 基準色相との明るさの差だけを補正するので、先頭の色は選んだ位置のまま動かない。
+   */
+  function toneColor(hue, tone, index, baseHue) {
+    const t = spreadT(index);
+    const comp = hueLightnessCompensation(hue) - hueLightnessCompensation(baseHue);
+    return {
+      h: normalizeHue(hue),
+      s: clamp(tone.s + t * TONE_SPREAD_S, 0, 100),
+      l: clamp(tone.l + t * TONE_SPREAD_L + comp, 3, 97),
+    };
+  }
+
+  /** 設定（基準色相・トーン位置・ルール・色数）から HSL の配列をつくる */
+  function generatePalette({ baseHue, s, l, achromatic, ruleId, count }) {
     const rule = getRule(ruleId);
-    const tone = getTone(toneId);
     const n = clamp(count, MIN_COLORS, MAX_COLORS);
+    const tone = { s, l };
     const out = [];
 
-    if (rule.mode === "mono") {
-      // 同一色相：トーン中心から明度を上下に広げ、彩度はトーン範囲内で散らす
-      const center = toneCenter(tone);
-      const spanL = 18;
+    if (achromatic) {
+      // 無彩色：色相をもたないので、明度だけを上下に散らす
       for (let i = 0; i < n; i++) {
-        const t = n === 1 ? 0.5 : i / (n - 1);
-        const l = clamp(center.l + lerp(spanL, -spanL, t) + hueLightnessCompensation(baseHue), 8, 94);
-        const s = clamp(lerp(tone.s[0], tone.s[1], SPREAD_STEPS[i % SPREAD_STEPS.length]), 0, 100);
-        out.push({ h: normalizeHue(baseHue), s, l });
+        out.push({ h: normalizeHue(baseHue), s: 0, l: clamp(l + spreadT(i) * MONO_SPREAD_L * 1.6, 3, 97) });
+      }
+    } else if (rule.mode === "mono") {
+      // 同一色相：明度を大きめに、彩度を控えめに散らす
+      for (let i = 0; i < n; i++) {
+        const t = spreadT(i);
+        out.push({
+          h: normalizeHue(baseHue),
+          s: clamp(s + t * (TONE_SPREAD_S * 0.7), 0, 100),
+          l: clamp(l + t * MONO_SPREAD_L, 4, 96),
+        });
       }
     } else if (rule.mode === "toneOnTone") {
       // 同一色相・トーン違い
-      pickLadderTones(tone.id, n).forEach((t, i) => out.push(toneColor(baseHue, t, i)));
+      const base = classifyTone(s, l).tone;
+      pickLadderTones(base.id, n).forEach((t, i) => out.push(toneColor(baseHue, t, i, baseHue)));
     } else if (rule.mode === "toneInTone") {
-      // 同一トーン・色相違い（±90° の範囲に均等配置）
-      for (let i = 0; i < n; i++) {
-        const t = n === 1 ? 0.5 : i / (n - 1);
-        out.push(toneColor(baseHue + lerp(-90, 90, t), tone, i));
-      }
+      // 同一トーン・色相違い（基準色相の ±90° に広げる）
+      for (let i = 0; i < n; i++) out.push(toneColor(baseHue + spreadT(i) * 90, tone, i, baseHue));
     } else {
       // 色相オフセット方式
-      for (let i = 0; i < n; i++) out.push(toneColor(baseHue + rule.offsets[i % rule.offsets.length], tone, i));
+      for (let i = 0; i < n; i++) out.push(toneColor(baseHue + rule.offsets[i % rule.offsets.length], tone, i, baseHue));
     }
     return out;
   }
 
   /* =========================================================================
-   * 6. 状態（DOM からは読み戻さず、常にこの state を唯一の情報源とする）
+   * 7. 状態（DOM からは読み戻さず、常にこの state を唯一の情報源とする）
+   *    baseHue = 色相環で選んだ位置、s / l = トーンマップで選んだ位置。
    * ========================================================================= */
   const state = {
-    baseHue: 210,
-    toneId: "vivid",
+    baseHue: 210,        // 色相環の選択位置（HSL 角度・連続値）
+    s: 100, l: 52,       // トーンマップの選択位置（彩度 % × 明度 %）
+    achromatic: false,   // 無彩色の列を選んでいるか
     ruleId: "analogous",
     count: DEFAULT_COLORS,
     lockHue: false,
     lockTone: false,
     lockRule: false,
-    cards: [],       // { h, s, l, locked }
+    cards: [],           // { h, s, l, locked }
     exportTab: "hex",
-    history: [],     // 直近の生成結果（メモリ上）
+    history: [],         // 直近の生成結果（メモリ上）
   };
 
   const EXPORT_TABS = [
@@ -626,6 +805,21 @@
     { id: "tailwind", label: "Tailwind 風" },
     { id: "json", label: "JSON" },
   ];
+
+  /** 現在選んでいるトーン（PCCS の名前つきトーン・無彩色・その中間のいずれか） */
+  function activeTone() {
+    const cls = classifyTone(state.achromatic ? 0 : state.s, state.l);
+    const onPoint = state.achromatic
+      ? Math.abs(cls.tone.l - state.l) < 0.6
+      : Math.abs(cls.tone.s - state.s) < 0.6 && Math.abs(cls.tone.l - state.l) < 0.6;
+    return {
+      tone: cls.tone,
+      achromatic: state.achromatic,
+      exact: onPoint,
+      label: (onPoint ? "" : "≈") + cls.tone.name,
+      abbr: cls.tone.abbr,
+    };
+  }
 
   /** 設定からカードを作り直す。ロック中のカードは維持する。 */
   function regenerate() {
@@ -639,8 +833,11 @@
 
   /** ランダム生成（固定された項目は変更しない） */
   function randomize() {
-    if (!state.lockHue) state.baseHue = Math.floor(Math.random() * HUE_MAX);
-    if (!state.lockTone) state.toneId = TONES[Math.floor(Math.random() * TONES.length)].id;
+    if (!state.lockHue) state.baseHue = pccsToHue(1 + Math.floor(Math.random() * 24));
+    if (!state.lockTone) {
+      const tone = TONES[Math.floor(Math.random() * TONES.length)];
+      state.s = tone.s; state.l = tone.l; state.achromatic = false;
+    }
     if (!state.lockRule) state.ruleId = RULES[Math.floor(Math.random() * RULES.length)].id;
     regenerate();
     pushHistory();
@@ -648,11 +845,12 @@
   }
 
   /* =========================================================================
-   * 7. 履歴（メモリ上に直近 HISTORY_LIMIT 件）
+   * 8. 履歴（メモリ上に直近 HISTORY_LIMIT 件）
    * ========================================================================= */
   function pushHistory() {
     const snapshot = {
-      baseHue: state.baseHue, toneId: state.toneId, ruleId: state.ruleId, count: state.count,
+      baseHue: state.baseHue, s: state.s, l: state.l, achromatic: state.achromatic,
+      ruleId: state.ruleId, count: state.count,
       cards: state.cards.map((c) => ({ ...c })),
       hexes: state.cards.map(cardHex),
     };
@@ -666,7 +864,9 @@
     const item = state.history[index];
     if (!item) return;
     state.baseHue = item.baseHue;
-    state.toneId = item.toneId;
+    state.s = item.s;
+    state.l = item.l;
+    state.achromatic = item.achromatic;
     state.ruleId = item.ruleId;
     state.count = item.count;
     state.cards = item.cards.map((c) => ({ ...c }));
@@ -675,12 +875,14 @@
   }
 
   /* =========================================================================
-   * 8. 共有 URL（基準色相・トーン・ルール・色数をクエリに反映）
+   * 9. 共有 URL（色相環とトーンマップの選択位置をクエリに反映）
    * ========================================================================= */
   function stateToQuery() {
     const p = new URLSearchParams();
     p.set("h", String(round(state.baseHue)));
-    p.set("tone", state.toneId);
+    p.set("s", String(round(state.s)));
+    p.set("l", String(round(state.l)));
+    if (state.achromatic) p.set("ac", "1");
     p.set("rule", state.ruleId);
     p.set("n", String(state.count));
     return p.toString();
@@ -690,7 +892,17 @@
     const p = new URLSearchParams(location.search);
     const h = parseInt(p.get("h"), 10);
     if (Number.isFinite(h)) state.baseHue = normalizeHue(h);
-    if (p.get("tone") && TONES.some((t) => t.id === p.get("tone"))) state.toneId = p.get("tone");
+
+    // 旧バージョンの tone= 指定（vivid など）も読めるようにする
+    const legacy = LEGACY_TONES[p.get("tone")] || (TONES.some((t) => t.id === p.get("tone")) ? p.get("tone") : null);
+    if (legacy) { const t = getTone(legacy); state.s = t.s; state.l = t.l; }
+
+    const s = parseInt(p.get("s"), 10);
+    const l = parseInt(p.get("l"), 10);
+    if (Number.isFinite(s)) state.s = clamp(s, 0, 100);
+    if (Number.isFinite(l)) state.l = clamp(l, 3, 97);
+    if (p.get("ac") === "1") { state.achromatic = true; state.s = 0; }
+
     if (p.get("rule") && RULES.some((r) => r.id === p.get("rule"))) state.ruleId = p.get("rule");
     const n = parseInt(p.get("n"), 10);
     if (Number.isFinite(n)) state.count = clamp(n, MIN_COLORS, MAX_COLORS);
@@ -700,7 +912,7 @@
   const shareUrl = () => location.origin + location.pathname + "?" + stateToQuery();
 
   /* =========================================================================
-   * 9. エクスポート生成
+   * 10. エクスポート生成
    * ========================================================================= */
   const cardHex = (c) => hslToHex(c.h, c.s, c.l);
 
@@ -746,10 +958,15 @@
     }
 
     // JSON
+    const active = activeTone();
     return JSON.stringify({
       baseHue: round(state.baseHue),
-      tone: state.toneId,
-      toneName: getTone(state.toneId).name,
+      pccsHue: state.achromatic ? null : `${nearestHue(state.baseHue).n}:${nearestHue(state.baseHue).code}`,
+      tone: active.tone.id,
+      toneName: active.tone.name,
+      toneS: round(state.achromatic ? 0 : state.s),
+      toneL: round(state.l),
+      achromatic: state.achromatic,
       rule: state.ruleId,
       ruleName: getRule(state.ruleId).name,
       count: state.count,
@@ -768,14 +985,16 @@
   }
 
   /* =========================================================================
-   * 10. DOM 参照
+   * 11. DOM 参照
    * ========================================================================= */
   const $ = (id) => document.getElementById(id);
   const el = {
-    hue: $("hue"), hueValue: $("hue-value"), lockHue: $("lock-hue"),
+    wheelStage: $("wheel-stage"), wheelCanvas: $("wheel-canvas"), huePins: $("hue-pins"),
+    hueReadout: $("hue-readout"), lockHue: $("lock-hue"),
+    planeStage: $("plane-stage"), planeCanvas: $("plane-canvas"), tonePins: $("tone-pins"),
+    toneReadout: $("tone-readout"), lockTone: $("lock-tone"),
     rule: $("rule"), ruleDesc: $("rule-desc"), lockRule: $("lock-rule"),
     count: $("count"), countValue: $("count-value"),
-    toneMap: $("tone-map"), toneValue: $("tone-value"), lockTone: $("lock-tone"),
     palette: $("palette"), preview: $("preview"),
     exportTabs: $("export-tabs"), exportCode: $("export-code"),
     history: $("history"), historyEmpty: $("history-empty"),
@@ -783,7 +1002,7 @@
   };
 
   /* =========================================================================
-   * 11. クリップボード & トースト
+   * 12. クリップボード & トースト
    * ========================================================================= */
   let toastTimer = null;
   function showToast(message) {
@@ -815,29 +1034,332 @@
   }
 
   /* =========================================================================
-   * 12. レンダリング
+   * 13. 図とパレットのレンダリング
    * ========================================================================= */
+  /* ---- 図のジオメトリ（canvas とピンで共有する。値はステージ幅・高さに対する比率） ---- */
+  const WHEEL = {
+    ringOut: 0.500,  // 連続した色相リングの外半径
+    ringIn:  0.410,  // 同・内半径
+    dot:     0.338,  // PCCS 24 色相の丸を並べる半径
+    dotR:    0.042,  // 同・丸の半径
+    hub:     0.028,  // 中心の丸の半径
+  };
+  const PLANE = {
+    neutralX: [0.026, 0.118],  // 無彩色の列（横方向の範囲）
+    chromaX:  [0.158, 0.928],  // 有彩色の平面（横方向の範囲）
+    y:        [0.045, 0.955],  // 縦方向の範囲
+    lTop: 98, lBottom: 2,      // 上端・下端の明度
+  };
+  const RING_MIN_S = 14;       // リングが完全な灰色にならないようにする下限彩度
+
+  // 真上を 0° とし、時計回りに角度を測る（PCCS 8:Y が真上）
+  const toRad = (deg) => ((deg - 90) * Math.PI) / 180;
+  const hueToAngle = (h) => (hueToPccs(h) - 8) * 15;
+  const angleToHue = (a) => pccsToHue(8 + a / 15);
+
+  const planeX = (s) => PLANE.chromaX[0] + (clamp(s, 0, 100) / 100) * (PLANE.chromaX[1] - PLANE.chromaX[0]);
+  const planeY = (l) => PLANE.y[0] + ((PLANE.lTop - clamp(l, PLANE.lBottom, PLANE.lTop)) / (PLANE.lTop - PLANE.lBottom)) * (PLANE.y[1] - PLANE.y[0]);
+  const xToS = (x) => clamp(((x - PLANE.chromaX[0]) / (PLANE.chromaX[1] - PLANE.chromaX[0])) * 100, 0, 100);
+  const yToL = (y) => clamp(PLANE.lTop - ((y - PLANE.y[0]) / (PLANE.y[1] - PLANE.y[0])) * (PLANE.lTop - PLANE.lBottom), PLANE.lBottom, PLANE.lTop);
+  const neutralX = () => (PLANE.neutralX[0] + PLANE.neutralX[1]) / 2;
+
+  /** 図に使う「現在のトーン」。無彩色でもリングは色相が見えるよう彩度を確保する。 */
+  const ringTone = () => ({ s: state.achromatic ? 100 : Math.max(state.s, RING_MIN_S), l: state.achromatic ? 52 : state.l });
+
+  /** canvas の実解像度を CSS サイズ × DPR に合わせ、描画コンテキストを返す */
+  function setupCanvas(canvas) {
+    const rect = canvas.getBoundingClientRect();
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const w = Math.max(1, Math.round(rect.width * dpr));
+    const h = Math.max(1, Math.round(rect.height * dpr));
+    if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+    const ctx = canvas.getContext("2d");
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+    return { ctx, w, h, ready: rect.width > 0 };
+  }
+
+  function roundRectPath(ctx, x, y, w, h, r) {
+    const rr = Math.min(r, w / 2, h / 2);
+    ctx.beginPath();
+    ctx.moveTo(x + rr, y);
+    ctx.arcTo(x + w, y, x + w, y + h, rr);
+    ctx.arcTo(x + w, y + h, x, y + h, rr);
+    ctx.arcTo(x, y + h, x, y, rr);
+    ctx.arcTo(x, y, x + w, y, rr);
+    ctx.closePath();
+  }
+
+  /* ---- 色相環 ---- */
+  function drawWheel() {
+    const { ctx, w, h, ready } = setupCanvas(el.wheelCanvas);
+    if (!ready) return;
+    const size = Math.min(w, h), cx = w / 2, cy = h / 2;
+    const rOut = size * WHEEL.ringOut, rIn = size * WHEEL.ringIn;
+    const rDot = size * WHEEL.dot, dotR = size * WHEEL.dotR;
+    const tone = ringTone();
+
+    // 連続した色相リング（1.5° ずつ塗り、隣と少し重ねて継ぎ目を消す）
+    const step = 1.5;
+    for (let a = 0; a < 360; a += step) {
+      ctx.beginPath();
+      ctx.arc(cx, cy, rOut, toRad(a - 0.6), toRad(a + step + 0.6));
+      ctx.arc(cx, cy, rIn, toRad(a + step + 0.6), toRad(a - 0.6), true);
+      ctx.closePath();
+      ctx.fillStyle = hslToHex(angleToHue(a + step / 2), tone.s, tone.l);
+      ctx.fill();
+    }
+
+    // 24 色相の境界を示す目盛り
+    ctx.strokeStyle = "rgba(0,0,0,.28)";
+    ctx.lineWidth = Math.max(1, size * 0.002);
+    for (let n = 0; n < 24; n++) {
+      const rad = toRad((n + 0.5 - 8) * 15);
+      ctx.beginPath();
+      ctx.moveTo(cx + Math.cos(rad) * rIn, cy + Math.sin(rad) * rIn);
+      ctx.lineTo(cx + Math.cos(rad) * rOut, cy + Math.sin(rad) * rOut);
+      ctx.stroke();
+    }
+
+    // パレットが使っている色相へ、中心から線を引く（無彩色のときは色相をもたないので引かない）
+    if (!state.achromatic) {
+      ctx.lineCap = "round";
+      state.cards.forEach((card) => {
+        const rad = toRad(hueToAngle(card.h));
+        const hex = cardHex(card);
+        const from = size * WHEEL.hub;
+        const to = rDot - dotR * 1.15;
+        ctx.beginPath();
+        ctx.moveTo(cx + Math.cos(rad) * from, cy + Math.sin(rad) * from);
+        ctx.lineTo(cx + Math.cos(rad) * to, cy + Math.sin(rad) * to);
+        ctx.strokeStyle = "rgba(0,0,0,.45)";
+        ctx.lineWidth = size * 0.016;
+        ctx.stroke();
+        ctx.strokeStyle = hex;
+        ctx.lineWidth = size * 0.011;
+        ctx.stroke();
+      });
+    }
+
+    // リング上の選択位置（基準色相）
+    const baseAngle = hueToAngle(state.baseHue);
+    const mOut = rOut - size * 0.006, mIn = rIn + size * 0.006;
+    ctx.lineJoin = "round";
+    ctx.beginPath();
+    ctx.arc(cx, cy, mOut, toRad(baseAngle - 7.5), toRad(baseAngle + 7.5));
+    ctx.arc(cx, cy, mIn, toRad(baseAngle + 7.5), toRad(baseAngle - 7.5), true);
+    ctx.closePath();
+    ctx.strokeStyle = "rgba(0,0,0,.75)";
+    ctx.lineWidth = size * 0.011;
+    ctx.stroke();
+    ctx.strokeStyle = "#fff";
+    ctx.lineWidth = size * 0.006;
+    ctx.stroke();
+
+    // 中心（線の集まる点）
+    const baseHex = state.achromatic ? hslToHex(0, 0, state.l) : hslToHex(state.baseHue, state.s, state.l);
+    ctx.beginPath();
+    ctx.arc(cx, cy, size * WHEEL.hub, 0, Math.PI * 2);
+    ctx.fillStyle = baseHex;
+    ctx.fill();
+    ctx.strokeStyle = "rgba(255,255,255,.85)";
+    ctx.lineWidth = Math.max(1, size * 0.004);
+    ctx.stroke();
+  }
+
+  /* ---- トーンマップ（彩度 × 明度の平面 ＋ 無彩色の列） ---- */
+  const planeBuf = document.createElement("canvas");
+  const PLANE_BUF_W = 160, PLANE_BUF_H = 170;
+  planeBuf.width = PLANE_BUF_W;
+  planeBuf.height = PLANE_BUF_H;
+
+  function drawPlane() {
+    const { ctx, w, h, ready } = setupCanvas(el.planeCanvas);
+    if (!ready) return;
+    const size = Math.min(w, h);
+    const x0 = PLANE.chromaX[0] * w, x1 = PLANE.chromaX[1] * w;
+    const nx0 = PLANE.neutralX[0] * w, nx1 = PLANE.neutralX[1] * w;
+    const y0 = PLANE.y[0] * h, y1 = PLANE.y[1] * h;
+    const radius = size * 0.05;
+
+    // 無彩色の列（白 → 黒）
+    const grad = ctx.createLinearGradient(0, y0, 0, y1);
+    for (let i = 0; i <= 8; i++) grad.addColorStop(i / 8, hslToHex(0, 0, lerp(PLANE.lTop, PLANE.lBottom, i / 8)));
+    roundRectPath(ctx, nx0, y0, nx1 - nx0, y1 - y0, radius * 0.7);
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+    // 有彩色の平面（彩度 × 明度のすべての組み合わせ）を小さめに作って拡大する
+    const bctx = planeBuf.getContext("2d");
+    const img = bctx.createImageData(PLANE_BUF_W, PLANE_BUF_H);
+    const data = img.data;
+    let p = 0;
+    for (let yy = 0; yy < PLANE_BUF_H; yy++) {
+      const l = lerp(PLANE.lTop, PLANE.lBottom, yy / (PLANE_BUF_H - 1));
+      for (let xx = 0; xx < PLANE_BUF_W; xx++) {
+        const c = hslToRgb(state.baseHue, (xx / (PLANE_BUF_W - 1)) * 100, l);
+        data[p++] = c.r; data[p++] = c.g; data[p++] = c.b; data[p++] = 255;
+      }
+    }
+    bctx.putImageData(img, 0, 0);
+    ctx.save();
+    roundRectPath(ctx, x0, y0, x1 - x0, y1 - y0, radius);
+    ctx.clip();
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(planeBuf, x0, y0, x1 - x0, y1 - y0);
+    ctx.restore();
+
+    // 無彩色の列と有彩色の平面の区切り
+    ctx.save();
+    ctx.strokeStyle = "rgba(255,255,255,.35)";
+    ctx.lineWidth = Math.max(1, size * 0.004);
+    ctx.setLineDash([size * 0.02, size * 0.022]);
+    ctx.beginPath();
+    ctx.moveTo((nx1 + x0) / 2, y0);
+    ctx.lineTo((nx1 + x0) / 2, y1);
+    ctx.stroke();
+    ctx.restore();
+
+    // パレットの各色の位置
+    state.cards.forEach((card) => {
+      const px = (card.s <= ACHROMATIC_S && state.achromatic ? neutralX() : planeX(card.s)) * w;
+      const py = planeY(card.l) * h;
+      ctx.beginPath();
+      ctx.arc(px, py, size * 0.016, 0, Math.PI * 2);
+      ctx.fillStyle = cardHex(card);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(0,0,0,.55)";
+      ctx.lineWidth = Math.max(1, size * 0.007);
+      ctx.stroke();
+      ctx.strokeStyle = "rgba(255,255,255,.9)";
+      ctx.lineWidth = Math.max(1, size * 0.003);
+      ctx.stroke();
+    });
+
+    // 現在の選択位置（PCCS のトーン上ならピンを囲むように大きく描く）
+    const sx = (state.achromatic ? neutralX() : planeX(state.s)) * w;
+    const sy = planeY(state.l) * h;
+    const active = activeTone();
+    const markR = size * (active.exact ? (active.achromatic ? 0.063 : 0.079) : 0.040);
+    ctx.beginPath();
+    ctx.arc(sx, sy, markR, 0, Math.PI * 2);
+    ctx.strokeStyle = "rgba(0,0,0,.7)";
+    ctx.lineWidth = Math.max(2, size * 0.011);
+    ctx.stroke();
+    ctx.strokeStyle = "#fff";
+    ctx.lineWidth = Math.max(1, size * 0.006);
+    ctx.stroke();
+  }
+
+  /* ---- 図の上に重ねるピン（PCCS の基準点） ---- */
+  function buildPins() {
+    PCCS_HUES.forEach((hue) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "pin hue-pin";
+      b.dataset.hue = String(hue.n);
+      const rad = toRad((hue.n - 8) * 15);
+      b.style.left = (50 + Math.cos(rad) * WHEEL.dot * 100) + "%";
+      b.style.top = (50 + Math.sin(rad) * WHEEL.dot * 100) + "%";
+      b.textContent = String(hue.n);
+      b.title = `${hue.n}:${hue.code}（${hue.jp}）`;
+      b.setAttribute("aria-label", `色相 ${hue.n}:${hue.code} ${hue.jp}`);
+      el.huePins.appendChild(b);
+    });
+
+    TONES.forEach((tone) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "pin tone-pin";
+      b.dataset.tone = tone.id;
+      b.style.left = planeX(tone.s) * 100 + "%";
+      b.style.top = planeY(tone.l) * 100 + "%";
+      b.textContent = tone.abbr;
+      b.title = `${tone.name}（${tone.en} / S ${tone.s}% L ${tone.l}%）`;
+      b.setAttribute("aria-label", `トーン ${tone.name}`);
+      el.tonePins.appendChild(b);
+    });
+
+    NEUTRALS.forEach((n) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "pin tone-pin neutral-pin";
+      b.dataset.neutral = n.id;
+      b.style.left = neutralX() * 100 + "%";
+      b.style.top = planeY(n.l) * 100 + "%";
+      b.textContent = n.abbr;
+      b.title = `${n.name}（${n.id} / 無彩色 L ${n.l}%）`;
+      b.setAttribute("aria-label", `無彩色 ${n.name}`);
+      el.tonePins.appendChild(b);
+    });
+  }
+
+  /** 色相番号と現在の基準色相のずれ（色相環 24 分割ぶんを一周として測る） */
+  function hueDistance(n) {
+    const d = Math.abs(hueToPccs(state.baseHue) - n);
+    return Math.min(d, 24 - d);
+  }
+
+  function updatePins() {
+    const tone = ringTone();
+    for (const b of el.huePins.children) {
+      const n = Number(b.dataset.hue);
+      const hex = hslToHex(pccsToHue(n), tone.s, tone.l);
+      b.style.background = hex;
+      b.style.color = bestTextOn(hex);
+      b.setAttribute("aria-pressed", String(!state.achromatic && hueDistance(n) < 0.1));
+    }
+    for (const b of el.tonePins.children) {
+      if (b.dataset.tone) {
+        const tn = getTone(b.dataset.tone);
+        const hex = hslToHex(state.baseHue, tn.s, tn.l);
+        const fg = bestTextOn(hex);
+        b.style.color = fg;
+        b.classList.toggle("on-light", fg === "#000000");
+        b.setAttribute("aria-pressed", String(!state.achromatic && Math.abs(state.s - tn.s) < 0.6 && Math.abs(state.l - tn.l) < 0.6));
+      } else {
+        const nt = getNeutral(b.dataset.neutral);
+        const hex = hslToHex(0, 0, nt.l);
+        const fg = bestTextOn(hex);
+        b.style.color = fg;
+        b.classList.toggle("on-light", fg === "#000000");
+        b.setAttribute("aria-pressed", String(state.achromatic && Math.abs(state.l - nt.l) < 0.6));
+      }
+    }
+  }
+
+  function updateReadouts() {
+    const hue = nearestHue(state.baseHue);
+    const onHue = hueDistance(hue.n) < 0.1;
+    el.hueReadout.textContent = state.achromatic
+      ? "無彩色（色相なし）"
+      : `${onHue ? "" : "≈"}${hue.n}:${hue.code} ${hue.jp} / H ${round(state.baseHue)}°`;
+
+    const t = activeTone();
+    el.toneReadout.textContent = state.achromatic
+      ? `${t.label}（${t.abbr}）/ S 0% L ${round(state.l)}%`
+      : `${t.label}（${t.abbr}）/ S ${round(state.s)}% L ${round(state.l)}%`;
+  }
+
+  function renderFigures() {
+    el.wheelStage.classList.toggle("muted", state.achromatic);
+    drawWheel();
+    drawPlane();
+    updatePins();
+    updateReadouts();
+  }
+
   function renderControls() {
-    el.hue.value = String(round(state.baseHue));
-    el.hueValue.textContent = round(state.baseHue) + "°";
     el.count.value = String(state.count);
     el.countValue.textContent = state.count + " 色";
     el.rule.value = state.ruleId;
-    el.ruleDesc.textContent = getRule(state.ruleId).desc;
-    el.toneValue.textContent = getTone(state.toneId).name;
+    el.ruleDesc.textContent = state.achromatic
+      ? "無彩色を選択中：色相をもたないため、明度差だけの配色になります。"
+      : getRule(state.ruleId).desc;
     el.lockHue.checked = state.lockHue;
     el.lockTone.checked = state.lockTone;
     el.lockRule.checked = state.lockRule;
-
-    // トーンマップのスウォッチは現在の基準色相で描く
-    for (const btn of el.toneMap.children) {
-      const tone = getTone(btn.dataset.tone);
-      const c = toneColor(state.baseHue, tone, 0);
-      const hex = hslToHex(c.h, c.s, c.l);
-      btn.style.background = hex;
-      btn.style.color = bestTextOn(hex);
-      btn.setAttribute("aria-pressed", String(tone.id === state.toneId));
-    }
   }
 
   function renderPalette() {
@@ -962,13 +1484,14 @@
       b.title = "クリックで復元";
       b.innerHTML = `
         <span class="history-strip">${item.hexes.map((h) => `<span style="background:${h}"></span>`).join("")}</span>
-        <span class="history-meta">${getTone(item.toneId).name} / H${round(item.baseHue)}°<br>${getRule(item.ruleId).name.replace(/（.*）/, "")}</span>`;
+        <span class="history-meta">${classifyTone(item.achromatic ? 0 : item.s, item.l).tone.name}${item.achromatic ? "" : ` / ${nearestHue(item.baseHue).n}:${nearestHue(item.baseHue).code}`}<br>${getRule(item.ruleId).name.replace(/（.*）/, "")}</span>`;
       el.history.appendChild(b);
     });
   }
 
   function render() {
     renderControls();
+    renderFigures();
     renderPalette();
     renderPreview();
     renderExportTabs();
@@ -977,23 +1500,99 @@
   }
 
   /* =========================================================================
-   * 13. 初期化とイベント
+   * 14. 初期化とイベント
    * ========================================================================= */
-  function buildToneMap() {
-    el.toneMap.style.gridTemplateRows = `repeat(${TONE_MAP_ROWS}, auto)`;
-    TONES.forEach((tone) => {
-      const b = document.createElement("button");
-      b.type = "button";
-      b.className = "tone-cell";
-      b.dataset.tone = tone.id;
-      b.style.gridColumn = String(tone.col);
-      b.style.gridRow = String(tone.row);
-      b.title = `${tone.name}（S ${tone.s[0]}–${tone.s[1]}% / L ${tone.l[0]}–${tone.l[1]}%）`;
-      b.innerHTML = `<span class="tone-abbr">${tone.abbr}</span><span class="tone-name">${tone.name}</span>`;
-      el.toneMap.appendChild(b);
+  /** ステージ内のポインタ位置を 0〜1 の比率で返す */
+  function stagePoint(stage, e) {
+    const rect = stage.getBoundingClientRect();
+    return { x: (e.clientX - rect.left) / rect.width, y: (e.clientY - rect.top) / rect.height };
+  }
+
+  /**
+   * 図のドラッグ操作を共通化する。
+   * ピンの上で押した場合はピン自身の click に任せ、ここでは処理しない。
+   */
+  function bindStage(stage, onMove) {
+    let dragging = false;
+    stage.addEventListener("pointerdown", (e) => {
+      if (e.button !== 0 || e.target.closest(".pin")) return;
+      if (!onMove(stagePoint(stage, e))) return;
+      dragging = true;
+      try { stage.setPointerCapture(e.pointerId); } catch (_) {}
+      e.preventDefault();
     });
-    // 列見出し用に、空セルがあってもレイアウトが崩れないよう最小列数を確保
-    el.toneMap.style.gridTemplateColumns = `repeat(${TONE_MAP_COLS}, 1fr)`;
+    stage.addEventListener("pointermove", (e) => { if (dragging) onMove(stagePoint(stage, e)); });
+    const finish = () => { if (dragging) { dragging = false; pushHistory(); } };
+    stage.addEventListener("pointerup", finish);
+    stage.addEventListener("pointercancel", finish);
+    stage.addEventListener("lostpointercapture", finish);
+  }
+
+  /** 色相を変更して再描画する（ドラッグ中は履歴に積まない） */
+  function setHue(hue) {
+    state.baseHue = normalizeHue(hue);
+    state.achromatic = false;
+    regenerate();
+    render();
+  }
+
+  /** トーンマップ上の位置（彩度・明度）を変更して再描画する */
+  function setTonePoint(s, l, achromatic) {
+    state.achromatic = !!achromatic;
+    state.s = achromatic ? 0 : clamp(s, 0, 100);
+    state.l = clamp(l, PLANE.lBottom, PLANE.lTop);
+    regenerate();
+    render();
+  }
+
+  function bindFigures() {
+    // 色相環：リングの内外どこでも、中心からの角度で色相を決める
+    bindStage(el.wheelStage, ({ x, y }) => {
+      const dx = x - 0.5, dy = y - 0.5;
+      const r = Math.hypot(dx, dy);
+      if (r < WHEEL.hub || r > WHEEL.ringOut + 0.03) return false;
+      setHue(angleToHue((Math.atan2(dy, dx) * 180) / Math.PI + 90));
+      return true;
+    });
+
+    // トーンマップ：左端の列なら無彩色、それ以外は彩度 × 明度の平面として読む
+    bindStage(el.planeStage, ({ x, y }) => {
+      if (y < PLANE.y[0] - 0.03 || y > PLANE.y[1] + 0.03) return false;
+      const inNeutral = x < (PLANE.neutralX[1] + PLANE.chromaX[0]) / 2;
+      if (!inNeutral && x > PLANE.chromaX[1] + 0.07) return false;
+      if (inNeutral && x < PLANE.neutralX[0] - 0.03) return false;
+      setTonePoint(xToS(x), yToL(y), inNeutral);
+      return true;
+    });
+
+    // ピン（PCCS の基準点）のクリック
+    el.huePins.addEventListener("click", (e) => {
+      const b = e.target.closest(".hue-pin");
+      if (!b) return;
+      setHue(pccsToHue(Number(b.dataset.hue)));
+      pushHistory();
+    });
+
+    el.tonePins.addEventListener("click", (e) => {
+      const b = e.target.closest(".tone-pin");
+      if (!b) return;
+      if (b.dataset.tone) {
+        const t = getTone(b.dataset.tone);
+        setTonePoint(t.s, t.l, false);
+      } else {
+        setTonePoint(0, getNeutral(b.dataset.neutral).l, true);
+      }
+      pushHistory();
+    });
+
+    // 図の大きさが変わったら canvas を描き直す
+    if (window.ResizeObserver) {
+      const ro = new ResizeObserver(() => { drawWheel(); drawPlane(); });
+      ro.observe(el.wheelStage);
+      ro.observe(el.planeStage);
+    } else {
+      window.addEventListener("resize", () => { drawWheel(); drawPlane(); });
+    }
   }
 
   function buildRuleSelect() {
@@ -1020,14 +1619,6 @@
       copyText(buildExport(state.exportTab), `${label} をコピーしました`);
     });
 
-    // 色相スライダー：ドラッグ中は履歴に積まず、確定時のみ記録する
-    el.hue.addEventListener("input", (e) => {
-      state.baseHue = normalizeHue(parseInt(e.target.value, 10));
-      regenerate();
-      render();
-    });
-    el.hue.addEventListener("change", pushHistory);
-
     el.count.addEventListener("input", (e) => {
       state.count = clamp(parseInt(e.target.value, 10), MIN_COLORS, MAX_COLORS);
       onSettingChange();
@@ -1038,13 +1629,6 @@
     el.lockHue.addEventListener("change", (e) => { state.lockHue = e.target.checked; });
     el.lockTone.addEventListener("change", (e) => { state.lockTone = e.target.checked; });
     el.lockRule.addEventListener("change", (e) => { state.lockRule = e.target.checked; });
-
-    el.toneMap.addEventListener("click", (e) => {
-      const btn = e.target.closest(".tone-cell");
-      if (!btn) return;
-      state.toneId = btn.dataset.tone;
-      onSettingChange();
-    });
 
     el.exportTabs.addEventListener("click", (e) => {
       const btn = e.target.closest(".tab");
@@ -1100,9 +1684,10 @@
   }
 
   function init() {
-    buildToneMap();
+    buildPins();
     buildRuleSelect();
     bindEvents();
+    bindFigures();
     applyQuery();
     regenerate();
     pushHistory();
