@@ -35,27 +35,37 @@
     -webkit-text-size-adjust: 100%;
   }
 
-  .wrap { max-width: 1440px; margin: 0 auto; padding: 20px 16px 80px; }
-
-  /* ===== ヘッダー ===== */
-  .site-header {
-    display: flex; flex-wrap: wrap; gap: 12px;
-    align-items: center; justify-content: space-between;
-    padding-bottom: 16px; margin-bottom: 20px;
-    border-bottom: 1px solid var(--line);
+  /* ===== フローティングパネル（サンプルWebサイトの上に重ねる） ===== */
+  .float-panel {
+    position: fixed; top: 16px; left: 16px; z-index: 40;
+    width: 372px; max-width: calc(100vw - 32px);
+    background: var(--bg-elev); border: 1px solid var(--line);
+    border-radius: var(--radius); box-shadow: 0 18px 56px rgba(0,0,0,.5);
+    display: flex; flex-direction: column; max-height: calc(100vh - 32px);
+    overflow: hidden;
   }
-  .site-header h1 { font-size: 19px; margin: 0; letter-spacing: .02em; }
-  .site-header p { margin: 2px 0 0; font-size: 12.5px; color: var(--fg-dim); }
-  .header-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .float-head {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    padding: 12px 14px; border-bottom: 1px solid var(--line); flex: none;
+  }
+  .float-head h1 { font-size: 15px; margin: 0; letter-spacing: .02em; line-height: 1.3; }
+  .float-head p { margin: 2px 0 0; font-size: 11px; color: var(--fg-dim); }
+  .float-actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+  .float-body {
+    overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 14px;
+  }
+  .float-panel.collapsed { max-height: none; }
+  .float-panel.collapsed .float-body { display: none; }
+  .float-panel.collapsed .float-head { border-bottom: 0; }
+  .collapse-btn { flex: none; }
 
-  /* ===== レイアウト：左にオプション、右にサンプルサイト ===== */
-  .layout { display: grid; grid-template-columns: 340px 1fr; gap: 20px; align-items: start; }
-  @media (max-width: 960px) { .layout { grid-template-columns: 1fr; } }
-
-  .options-panel { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
-  @media (min-width: 961px) { .options-panel { position: sticky; top: 16px; max-height: calc(100vh - 32px); overflow-y: auto; padding-right: 2px; } }
-
-  .site-stage { min-width: 0; }
+  /* ===== 色の関係ビジュアライゼーション（トーンマップ・色相環） ===== */
+  .viz-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 460px) { .viz-grid { grid-template-columns: 1fr; } }
+  .viz { display: flex; flex-direction: column; gap: 6px; }
+  .viz-label { font-size: 11px; color: var(--fg-muted); font-weight: 700; letter-spacing: .04em; }
+  .viz svg { width: 100%; height: auto; display: block; border-radius: var(--radius-sm); }
+  .viz-caption { font-size: 10.5px; color: var(--fg-dim); line-height: 1.4; }
 
   /* ===== 汎用パーツ ===== */
   button, select, input { font-family: inherit; font-size: inherit; color: inherit; }
@@ -237,10 +247,11 @@
     overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
   }
 
-  /* ===== サンプルWebサイト（メイン） ===== */
+  /* ===== サンプルWebサイト（メイン・ページ全体） ===== */
   .site {
-    border-radius: var(--radius); border: 1px solid var(--line);
-    box-shadow: 0 12px 40px rgba(0,0,0,.35);
+    min-height: 100vh;
+    border-radius: 0; border: 0;
+    box-shadow: none;
   }
   .site a { text-decoration: none; }
   .site-inner { font-size: 15px; line-height: 1.6; }
@@ -361,23 +372,27 @@
 </style>
 </head>
 <body>
-<div class="wrap">
 
-  <header class="site-header">
-    <div>
-      <h1>Hue &amp; Tone Palette Playground</h1>
-      <p>サンプルWebサイトの色合いを、配色ルール・トーンを変えながら確認 · <span class="kbd">Space</span> でランダム生成</p>
+  <!-- ===== メイン：サンプルWebサイト（ページ全体） ===== -->
+  <div class="site" id="site"></div>
+
+  <!-- ===== フローティングパネル（配色コントロール） ===== -->
+  <div class="float-panel" id="float-panel" aria-label="配色コントロール">
+
+    <div class="float-head">
+      <div>
+        <h1>Hue &amp; Tone Palette Playground</h1>
+        <p><span class="kbd">Space</span> でランダム生成</p>
+      </div>
+      <div class="float-actions">
+        <button class="btn primary small" id="btn-random" type="button">🎲 生成</button>
+        <button class="btn small" id="btn-share" type="button">🔗 共有</button>
+        <button class="btn small collapse-btn" id="btn-collapse" type="button"
+                aria-expanded="true" title="パネルを折りたたむ">−</button>
+      </div>
     </div>
-    <div class="header-actions">
-      <button class="btn primary" id="btn-random" type="button">🎲 ランダム生成</button>
-      <button class="btn" id="btn-share" type="button">🔗 共有URLをコピー</button>
-    </div>
-  </header>
 
-  <div class="layout">
-
-    <!-- ===== オプション（配色設定） ===== -->
-    <aside class="options-panel" aria-label="配色オプション">
+    <div class="float-body" id="float-body">
 
       <section class="panel" aria-labelledby="ttl-controls">
         <h2 id="ttl-controls">配色設定</h2>
@@ -434,6 +449,22 @@
         </div>
       </section>
 
+      <section class="panel" aria-labelledby="ttl-relations">
+        <h2 id="ttl-relations">色の関係</h2>
+        <div class="viz-grid">
+          <div class="viz">
+            <span class="viz-label">トーンマップ</span>
+            <div id="tone-viz"></div>
+            <span class="viz-caption">彩度（横）× 明度（縦）に各色を配置</span>
+          </div>
+          <div class="viz">
+            <span class="viz-label">色相環</span>
+            <div id="wheel-viz"></div>
+            <span class="viz-caption">色相の位置関係を表示</span>
+          </div>
+        </div>
+      </section>
+
       <section class="panel" aria-labelledby="ttl-palette">
         <h2 id="ttl-palette">パレット</h2>
         <div class="palette" id="palette"></div>
@@ -455,16 +486,9 @@
         <p class="empty" id="history-empty">まだ履歴はありません。</p>
       </section>
 
-    </aside>
-
-    <!-- ===== メイン：サンプルWebサイト ===== -->
-    <main class="site-stage" aria-label="サンプルWebサイト">
-      <div class="site" id="site"></div>
-    </main>
+    </div>
 
   </div>
-
-</div>
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
@@ -905,6 +929,8 @@
     exportTabs: $("export-tabs"), exportCode: $("export-code"),
     history: $("history"), historyEmpty: $("history-empty"),
     toast: $("toast"),
+    floatPanel: $("float-panel"), floatBody: $("float-body"), btnCollapse: $("btn-collapse"),
+    toneViz: $("tone-viz"), wheelViz: $("wheel-viz"),
   };
 
   /* =========================================================================
@@ -1177,6 +1203,162 @@
   }
 
   /* =========================================================================
+   * 13.5 色の関係ビジュアライゼーション（トーンマップ・色相環）
+   *      現在のパレットの全色を、トーンマップ（彩度×明度）と色相環に
+   *      プロットして、色同士の関係を視覚的に把握できるようにする。
+   * ========================================================================= */
+  const VIZ_W = 300;
+  const VIZ_H = 210;
+  const VIZ_PAD = 14;
+
+  /** トーンマップ：背景にトーン領域を現在の色相で塗り、各色を点でプロット */
+  function renderToneViz() {
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("viewBox", `0 0 ${VIZ_W} ${VIZ_H}`);
+    svg.setAttribute("role", "img");
+    svg.setAttribute("aria-label", "トーンマップ上の現在の配色");
+
+    const plotW = VIZ_W - VIZ_PAD * 2;
+    const plotH = VIZ_H - VIZ_PAD * 2;
+    const x = (s) => VIZ_PAD + (s / 100) * plotW;
+    const y = (l) => VIZ_PAD + (1 - l / 100) * plotH;
+
+    // 背景：トーン領域を現在の基準色相で塗る（デジタルならではの「色をつける」表現）
+    for (const tone of TONES) {
+      const c = toneColor(state.baseHue, tone, 0);
+      const hex = hslToHex(c.h, c.s, c.l);
+      const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+      rect.setAttribute("x", x(tone.s[0]));
+      rect.setAttribute("y", y(tone.l[1]));
+      rect.setAttribute("width", x(tone.s[1]) - x(tone.s[0]));
+      rect.setAttribute("height", y(tone.l[0]) - y(tone.l[1]));
+      rect.setAttribute("fill", hex);
+      rect.setAttribute("opacity", "0.55");
+      rect.setAttribute("stroke", "rgba(0,0,0,.25)");
+      rect.setAttribute("stroke-width", "0.5");
+      svg.appendChild(rect);
+    }
+
+    // 軸ラベル
+    const label = (text, tx, ty, anchor) => {
+      const t = document.createElementNS("http://www.w3.org/2000/svg", "text");
+      t.setAttribute("x", tx); t.setAttribute("y", ty);
+      t.setAttribute("text-anchor", anchor || "middle");
+      t.setAttribute("font-size", "9");
+      t.setAttribute("fill", "rgba(255,255,255,.7)");
+      t.textContent = text;
+      svg.appendChild(t);
+    };
+    label("低彩度", VIZ_PAD, VIZ_H - 2, "start");
+    label("高彩度", VIZ_W - VIZ_PAD, VIZ_H - 2, "end");
+    label("明るい", VIZ_W - 2, VIZ_PAD + 4, "end");
+    label("暗い", VIZ_W - 2, VIZ_H - VIZ_PAD, "end");
+
+    // 各パレット色を点でプロット
+    state.cards.forEach((card, i) => {
+      const hex = cardHex(card);
+      const cx = x(card.s), cy = y(card.l);
+      const ring = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+      ring.setAttribute("cx", cx); ring.setAttribute("cy", cy);
+      ring.setAttribute("r", "7");
+      ring.setAttribute("fill", "none");
+      ring.setAttribute("stroke", "#fff");
+      ring.setAttribute("stroke-width", "2");
+      svg.appendChild(ring);
+      const dot = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+      dot.setAttribute("cx", cx); dot.setAttribute("cy", cy);
+      dot.setAttribute("r", "4.5");
+      dot.setAttribute("fill", hex);
+      dot.setAttribute("stroke", "rgba(0,0,0,.5)");
+      dot.setAttribute("stroke-width", "1");
+      svg.appendChild(dot);
+      const num = document.createElementNS("http://www.w3.org/2000/svg", "text");
+      num.setAttribute("x", cx); num.setAttribute("y", cy - 9);
+      num.setAttribute("text-anchor", "middle");
+      num.setAttribute("font-size", "9");
+      num.setAttribute("font-weight", "700");
+      num.setAttribute("fill", "#fff");
+      num.setAttribute("stroke", "rgba(0,0,0,.6)");
+      num.setAttribute("stroke-width", "2.5");
+      num.setAttribute("paint-order", "stroke");
+      num.textContent = String(i + 1);
+      svg.appendChild(num);
+    });
+
+    el.toneViz.innerHTML = "";
+    el.toneViz.appendChild(svg);
+  }
+
+  /** 色相環：色相を円環状に配置し、各色をその色相角にプロット */
+  function renderWheelViz() {
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("viewBox", `0 0 ${VIZ_W} ${VIZ_H}`);
+    svg.setAttribute("role", "img");
+    svg.setAttribute("aria-label", "色相環上の現在の配色");
+
+    const cx = VIZ_W / 2, cy = VIZ_H / 2;
+    const rOuter = Math.min(VIZ_W, VIZ_H) / 2 - VIZ_PAD;
+    const rInner = rOuter * 0.42;
+    const segs = 36;
+
+    // 色相環のセグメント（円環を色相で塗る）
+    for (let i = 0; i < segs; i++) {
+      const a0 = (i / segs) * 360 - 90;
+      const a1 = ((i + 1) / segs) * 360 - 90;
+      const large = a1 - a0 > 180 ? 1 : 0;
+      const p0 = [cx + rOuter * Math.cos((a0 * Math.PI) / 180), cy + rOuter * Math.sin((a0 * Math.PI) / 180)];
+      const p1 = [cx + rOuter * Math.cos((a1 * Math.PI) / 180), cy + rOuter * Math.sin((a1 * Math.PI) / 180)];
+      const p2 = [cx + rInner * Math.cos((a1 * Math.PI) / 180), cy + rInner * Math.sin((a1 * Math.PI) / 180)];
+      const p3 = [cx + rInner * Math.cos((a0 * Math.PI) / 180), cy + rInner * Math.sin((a0 * Math.PI) / 180)];
+      const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      path.setAttribute("d",
+        `M ${p0[0]} ${p0[1]} A ${rOuter} ${rOuter} 0 ${large} 1 ${p1[0]} ${p1[1]} ` +
+        `L ${p2[0]} ${p2[1]} A ${rInner} ${rInner} 0 ${large} 0 ${p3[0]} ${p3[1]} Z`);
+      path.setAttribute("fill", hslToHex((i / segs) * 360, 90, 55));
+      path.setAttribute("stroke", "rgba(0,0,0,.25)");
+      path.setAttribute("stroke-width", "0.5");
+      svg.appendChild(path);
+    }
+
+    // 各パレット色をその色相角にプロット（彩度で半径を変える）
+    state.cards.forEach((card, i) => {
+      const hex = cardHex(card);
+      const ang = (card.h - 90) * (Math.PI / 180);
+      const r = rInner + (card.s / 100) * (rOuter - rInner);
+      const px = cx + r * Math.cos(ang);
+      const py = cy + r * Math.sin(ang);
+      const ring = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+      ring.setAttribute("cx", px); ring.setAttribute("cy", py);
+      ring.setAttribute("r", "7");
+      ring.setAttribute("fill", "none");
+      ring.setAttribute("stroke", "#fff");
+      ring.setAttribute("stroke-width", "2");
+      svg.appendChild(ring);
+      const dot = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+      dot.setAttribute("cx", px); dot.setAttribute("cy", py);
+      dot.setAttribute("r", "4.5");
+      dot.setAttribute("fill", hex);
+      dot.setAttribute("stroke", "rgba(0,0,0,.5)");
+      dot.setAttribute("stroke-width", "1");
+      svg.appendChild(dot);
+      const num = document.createElementNS("http://www.w3.org/2000/svg", "text");
+      num.setAttribute("x", px); num.setAttribute("y", py - 9);
+      num.setAttribute("text-anchor", "middle");
+      num.setAttribute("font-size", "9");
+      num.setAttribute("font-weight", "700");
+      num.setAttribute("fill", "#fff");
+      num.setAttribute("stroke", "rgba(0,0,0,.6)");
+      num.setAttribute("stroke-width", "2.5");
+      num.setAttribute("paint-order", "stroke");
+      num.textContent = String(i + 1);
+      svg.appendChild(num);
+    });
+
+    el.wheelViz.innerHTML = "";
+    el.wheelViz.appendChild(svg);
+  }
+
+  /* =========================================================================
    * 14. レンダリング（コントロール・パレット・エクスポート・履歴）
    * ========================================================================= */
   function renderControls() {
@@ -1283,6 +1465,8 @@
 
   function render() {
     renderControls();
+    renderToneViz();
+    renderWheelViz();
     renderPalette();
     renderSite();
     renderExportTabs();
@@ -1332,6 +1516,14 @@
     $("btn-copy-export").addEventListener("click", () => {
       const label = EXPORT_TABS.find((t) => t.id === state.exportTab).label;
       copyText(buildExport(state.exportTab), `${label} をコピーしました`);
+    });
+
+    // パネルの折りたたみ
+    el.btnCollapse.addEventListener("click", () => {
+      const collapsed = el.floatPanel.classList.toggle("collapsed");
+      el.btnCollapse.textContent = collapsed ? "+" : "−";
+      el.btnCollapse.setAttribute("aria-expanded", String(!collapsed));
+      el.btnCollapse.title = collapsed ? "パネルを展開する" : "パネルを折りたたむ";
     });
 
     // 色相スライダー：ドラッグ中は履歴に積まず、確定時のみ記録する
@@ -1390,6 +1582,8 @@
       else if (target.dataset.act === "adjust-l") state.cards[index].l = value;
       else return;
       renderPalette();
+      renderToneViz();
+      renderWheelViz();
       renderSite();
       renderExportTabs();
       // 調整中のスライダーにフォーカスを戻す（再描画で失われるため）
