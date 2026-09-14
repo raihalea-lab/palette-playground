@@ -63,9 +63,13 @@
   .collapse-btn { flex: none; }
   .drag-grip { flex: none; color: var(--fg-dim); font-size: 14px; line-height: 1; padding: 0 2px; }
 
-  /* ===== 色相環（クリック／ドラッグで基準色相を選択） ===== */
-  .wheel { width: 100%; max-width: 380px; margin: 0 auto; }
-  .wheel svg { width: 100%; height: auto; display: block; border-radius: 50%; cursor: crosshair; touch-action: none; }
+  /* ===== 色の関係ビジュアライゼーション（トーンマップ・色相環） ===== */
+  .viz-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 460px) { .viz-grid { grid-template-columns: 1fr; } }
+  .viz { display: flex; flex-direction: column; gap: 6px; }
+  .viz-label { font-size: 11px; color: var(--fg-muted); font-weight: 700; letter-spacing: .04em; }
+  .viz svg { width: 100%; height: auto; display: block; border-radius: var(--radius-sm); }
+  .viz-caption { font-size: 10.5px; color: var(--fg-dim); line-height: 1.4; }
 
   /* ===== 汎用パーツ ===== */
   button, select, input { font-family: inherit; font-size: inherit; color: inherit; }
@@ -115,20 +119,45 @@
     border-radius: var(--radius-sm); padding: 8px 10px;
   }
 
+  /* ===== 色相スライダー ===== */
+  .hue-slider { width: 100%; -webkit-appearance: none; appearance: none; background: transparent; margin: 0; }
+  .hue-slider::-webkit-slider-runnable-track {
+    height: 20px; border-radius: var(--radius-sm); border: 1px solid var(--line-strong);
+    background: linear-gradient(to right,
+      hsl(0 90% 50%), hsl(60 90% 50%), hsl(120 90% 50%),
+      hsl(180 90% 50%), hsl(240 90% 50%), hsl(300 90% 50%), hsl(360 90% 50%));
+  }
+  .hue-slider::-moz-range-track {
+    height: 20px; border-radius: var(--radius-sm); border: 1px solid var(--line-strong);
+    background: linear-gradient(to right,
+      hsl(0 90% 50%), hsl(60 90% 50%), hsl(120 90% 50%),
+      hsl(180 90% 50%), hsl(240 90% 50%), hsl(300 90% 50%), hsl(360 90% 50%));
+  }
+  .hue-slider::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 16px; height: 28px; margin-top: -5px;
+    border-radius: 4px; background: #fff; border: 2px solid #101215; cursor: pointer;
+    box-shadow: 0 1px 4px rgba(0,0,0,.6);
+  }
+  .hue-slider::-moz-range-thumb {
+    width: 14px; height: 26px; border-radius: 4px;
+    background: #fff; border: 2px solid #101215; cursor: pointer;
+  }
+
   /* ===== トーンマップ（彩度 × 明度の二次元配置） ===== */
   .tone-map {
-    display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; max-width: 620px;
   }
   .tone-cell {
     position: relative; border: 2px solid transparent; border-radius: var(--radius-sm);
-    padding: 0; cursor: pointer; aspect-ratio: 1.7 / 1; min-height: 60px;
+    padding: 0; cursor: pointer; aspect-ratio: 2.6 / 1; min-height: 40px; max-height: 58px;
     display: flex; flex-direction: column; align-items: center; justify-content: center;
-    gap: 2px; overflow: hidden; background: #000;
+    gap: 1px; overflow: hidden; background: #000;
   }
-  .tone-cell .tone-abbr { font-family: var(--mono); font-size: 13px; font-weight: 700; }
-  .tone-cell .tone-name { font-size: 11.5px; line-height: 1.1; }
+  .tone-cell .tone-abbr { font-family: var(--mono); font-size: 11px; font-weight: 700; }
+  .tone-cell .tone-name { font-size: 10.5px; line-height: 1.1; }
   .tone-cell[aria-pressed="true"] { border-color: #fff; box-shadow: 0 0 0 2px rgba(0,0,0,.55); }
-  .tone-axis { font-size: 11px; color: var(--fg-dim); display: flex; justify-content: space-between; margin-top: 8px; }
+  .tone-axis { font-size: 10.5px; color: var(--fg-dim); display: flex; justify-content: space-between; margin-top: 6px; max-width: 620px; }
 
   .row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
   @media (max-width: 620px) { .row-2 { grid-template-columns: 1fr; } }
@@ -388,21 +417,7 @@
 
         <div class="field">
           <div class="field-head">
-            <span class="field-label">トーンマップ（PCCS）</span>
-            <span>
-              <span class="field-value" id="tone-value"></span>
-              <label class="lock" title="ランダム生成でトーンを変更しない">
-                <input type="checkbox" id="lock-tone"> 固定
-              </label>
-            </span>
-          </div>
-          <div class="tone-map" id="tone-map" role="group" aria-label="トーンマップ"></div>
-          <div class="tone-axis"><span>← 低彩度</span><span>上：明るい／下：暗い</span><span>高彩度 →</span></div>
-        </div>
-
-        <div class="field">
-          <div class="field-head">
-            <span class="field-label">色相環（Hue）</span>
+            <span class="field-label">基準色相（Hue）</span>
             <span>
               <span class="field-value" id="hue-value">0°</span>
               <label class="lock" title="ランダム生成で色相を変更しない">
@@ -410,8 +425,8 @@
               </label>
             </span>
           </div>
-          <div class="wheel" id="wheel-viz"></div>
-          <p class="meta" style="margin:7px 0 0">クリック／ドラッグで基準色相を選択</p>
+          <input type="range" class="hue-slider" id="hue" min="0" max="360" step="1" value="0"
+                 aria-label="基準色相（0〜360度）">
         </div>
 
         <div class="row-2">
@@ -434,6 +449,33 @@
             <input type="range" id="count" min="2" max="6" step="1" value="5"
                    style="width:100%; accent-color: var(--accent);" aria-label="色数（2〜6）">
             <p class="meta" style="margin:7px 0 0">2 〜 6 色</p>
+          </div>
+        </div>
+
+        <div class="field">
+          <div class="field-head">
+            <span class="field-label">トーン（彩度 × 明度）</span>
+            <span>
+              <span class="field-value" id="tone-value"></span>
+              <label class="lock" title="ランダム生成でトーンを変更しない">
+                <input type="checkbox" id="lock-tone"> 固定
+              </label>
+            </span>
+          </div>
+          <div class="tone-map" id="tone-map" role="group" aria-label="トーンマップ"></div>
+          <div class="tone-axis"><span>← 低彩度</span><span>上：明るい／下：暗い</span><span>高彩度 →</span></div>
+        </div>
+
+        <div class="viz-grid" style="margin-top:16px">
+          <div class="viz">
+            <span class="viz-label">トーンマップ</span>
+            <div id="tone-viz"></div>
+            <span class="viz-caption">彩度（横）× 明度（縦）に各色を配置</span>
+          </div>
+          <div class="viz">
+            <span class="viz-label">色相環</span>
+            <div id="wheel-viz"></div>
+            <span class="viz-caption">色相の位置関係を表示</span>
           </div>
         </div>
       </section>
@@ -606,21 +648,19 @@
    *    col / row はトーンマップ上の位置（col: 低彩度→高彩度, row: 明→暗）
    * ========================================================================= */
   const TONES = [
-    { id: "pale",        name: "ペール",             abbr: "p",   s: [22, 34],  l: [84, 90], col: 1, row: 1 },
-    { id: "light",       name: "ライト",             abbr: "lt",  s: [44, 58],  l: [70, 78], col: 2, row: 1 },
-    { id: "light-gray",  name: "ライトグレイッシュ", abbr: "ltg", s: [12, 22],  l: [68, 76], col: 1, row: 2 },
-    { id: "soft",        name: "ソフト",             abbr: "sf",  s: [40, 52],  l: [58, 66], col: 2, row: 2 },
-    { id: "bright",      name: "ブライト",           abbr: "b",   s: [78, 92],  l: [58, 66], col: 3, row: 2 },
-    { id: "grayish",     name: "グレイッシュ",       abbr: "g",   s: [10, 20],  l: [46, 56], col: 1, row: 3 },
-    { id: "dull",        name: "ダル",               abbr: "d",   s: [32, 44],  l: [44, 54], col: 2, row: 3 },
-    { id: "strong",      name: "ストロング",         abbr: "s",   s: [66, 80],  l: [44, 52], col: 3, row: 3 },
-    { id: "vivid",       name: "ビビッド",           abbr: "v",   s: [92, 100], l: [46, 54], col: 4, row: 3 },
-    { id: "dark-gray",   name: "ダークグレイッシュ", abbr: "dkg", s: [8, 18],   l: [22, 30], col: 1, row: 4 },
-    { id: "dark",        name: "ダーク",             abbr: "dk",  s: [55, 70],  l: [20, 28], col: 2, row: 4 },
-    { id: "deep",        name: "ディープ",           abbr: "dp",  s: [82, 96],  l: [28, 36], col: 3, row: 4 },
+    { id: "pale",    name: "ペール",       abbr: "p",  s: [22, 34],  l: [84, 90], col: 2, row: 1 },
+    { id: "light",   name: "ライト",       abbr: "lt", s: [44, 58],  l: [70, 78], col: 3, row: 2 },
+    { id: "soft",    name: "ソフト",       abbr: "sf", s: [40, 52],  l: [58, 66], col: 3, row: 3 },
+    { id: "bright",  name: "ブライト",     abbr: "b",  s: [78, 92],  l: [58, 66], col: 4, row: 3 },
+    { id: "grayish", name: "グレイッシュ", abbr: "g",  s: [10, 20],  l: [46, 56], col: 1, row: 4 },
+    { id: "dull",    name: "ダル",         abbr: "d",  s: [32, 44],  l: [44, 54], col: 2, row: 4 },
+    { id: "strong",  name: "ストロング",   abbr: "s",  s: [66, 80],  l: [44, 52], col: 3, row: 4 },
+    { id: "vivid",   name: "ビビッド",     abbr: "v",  s: [92, 100], l: [46, 54], col: 4, row: 4 },
+    { id: "dark",    name: "ダーク",       abbr: "dk", s: [55, 70],  l: [20, 28], col: 2, row: 5 },
+    { id: "deep",    name: "ディープ",     abbr: "dp", s: [82, 96],  l: [28, 36], col: 4, row: 5 },
   ];
   const TONE_MAP_COLS = 4;
-  const TONE_MAP_ROWS = 4;
+  const TONE_MAP_ROWS = 5;
 
   // トーンオントーン（同一色相・トーン違い）で使う、明度順のトーン梯子
   const TONE_LADDER = ["pale", "light", "soft", "dull", "strong", "deep", "dark"];
@@ -908,7 +948,7 @@
    * ========================================================================= */
   const $ = (id) => document.getElementById(id);
   const el = {
-    hueValue: $("hue-value"), lockHue: $("lock-hue"),
+    hue: $("hue"), hueValue: $("hue-value"), lockHue: $("lock-hue"),
     rule: $("rule"), ruleDesc: $("rule-desc"), lockRule: $("lock-rule"),
     count: $("count"), countValue: $("count-value"),
     toneMap: $("tone-map"), toneValue: $("tone-value"), lockTone: $("lock-tone"),
@@ -918,7 +958,7 @@
     toast: $("toast"),
     floatPanel: $("float-panel"), floatBody: $("float-body"), btnCollapse: $("btn-collapse"),
     floatHead: $("float-head"),
-    wheelViz: $("wheel-viz"),
+    toneViz: $("tone-viz"), wheelViz: $("wheel-viz"),
     togglePalette: $("toggle-palette"), paletteBody: $("palette-body"),
     toggleExport: $("toggle-export"), exportBody: $("export-body"),
     toggleHistory: $("toggle-history"), historyBody: $("history-body"),
@@ -1194,30 +1234,108 @@
   }
 
   /* =========================================================================
-   * 13.5 色相環（クリック／ドラッグで基準色相を選択するインタラクティブなコントロール）
+   * 13.5 色の関係ビジュアライゼーション（トーンマップ・色相環）
+   *      現在のパレットの全色を、トーンマップ（彩度×明度）と色相環に
+   *      プロットして、色同士の関係を視覚的に把握できるようにする。
    * ========================================================================= */
-  const WHEEL_SIZE = 320;
-  const WHEEL_PAD = 10;
-  const WHEEL_SEGS = 24;
+  const VIZ_W = 460;
+  const VIZ_H = 300;
+  const VIZ_PAD = 16;
 
-  let wheelMarkerLine = null;
-  let wheelMarkerDot = null;
-
-  /** 色相環を一度だけ構築し、クリック／ドラッグで基準色相を選べるようにする */
-  function buildWheel() {
+  /** トーンマップ：背景にトーン領域を現在の色相で塗り、各色を点でプロット */
+  function renderToneViz() {
     const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-    svg.setAttribute("viewBox", `0 0 ${WHEEL_SIZE} ${WHEEL_SIZE}`);
+    svg.setAttribute("viewBox", `0 0 ${VIZ_W} ${VIZ_H}`);
     svg.setAttribute("role", "img");
-    svg.setAttribute("aria-label", "色相環（クリック／ドラッグで基準色相を選択）");
+    svg.setAttribute("aria-label", "トーンマップ上の現在の配色");
 
-    const cx = WHEEL_SIZE / 2, cy = WHEEL_SIZE / 2;
-    const rOuter = WHEEL_SIZE / 2 - WHEEL_PAD;
+    const plotW = VIZ_W - VIZ_PAD * 2;
+    const plotH = VIZ_H - VIZ_PAD * 2;
+    const x = (s) => VIZ_PAD + (s / 100) * plotW;
+    const y = (l) => VIZ_PAD + (1 - l / 100) * plotH;
+
+    // 背景：トーン領域を現在の基準色相で塗る（デジタルならではの「色をつける」表現）
+    for (const tone of TONES) {
+      const c = toneColor(state.baseHue, tone, 0);
+      const hex = hslToHex(c.h, c.s, c.l);
+      const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+      rect.setAttribute("x", x(tone.s[0]));
+      rect.setAttribute("y", y(tone.l[1]));
+      rect.setAttribute("width", x(tone.s[1]) - x(tone.s[0]));
+      rect.setAttribute("height", y(tone.l[0]) - y(tone.l[1]));
+      rect.setAttribute("fill", hex);
+      rect.setAttribute("opacity", "0.55");
+      rect.setAttribute("stroke", "rgba(0,0,0,.25)");
+      rect.setAttribute("stroke-width", "0.5");
+      svg.appendChild(rect);
+    }
+
+    // 軸ラベル
+    const label = (text, tx, ty, anchor) => {
+      const t = document.createElementNS("http://www.w3.org/2000/svg", "text");
+      t.setAttribute("x", tx); t.setAttribute("y", ty);
+      t.setAttribute("text-anchor", anchor || "middle");
+      t.setAttribute("font-size", "9");
+      t.setAttribute("fill", "rgba(255,255,255,.7)");
+      t.textContent = text;
+      svg.appendChild(t);
+    };
+    label("低彩度", VIZ_PAD, VIZ_H - 2, "start");
+    label("高彩度", VIZ_W - VIZ_PAD, VIZ_H - 2, "end");
+    label("明るい", VIZ_W - 2, VIZ_PAD + 4, "end");
+    label("暗い", VIZ_W - 2, VIZ_H - VIZ_PAD, "end");
+
+    // 各パレット色を点でプロット
+    state.cards.forEach((card, i) => {
+      const hex = cardHex(card);
+      const cx = x(card.s), cy = y(card.l);
+      const ring = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+      ring.setAttribute("cx", cx); ring.setAttribute("cy", cy);
+      ring.setAttribute("r", "7");
+      ring.setAttribute("fill", "none");
+      ring.setAttribute("stroke", "#fff");
+      ring.setAttribute("stroke-width", "2");
+      svg.appendChild(ring);
+      const dot = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+      dot.setAttribute("cx", cx); dot.setAttribute("cy", cy);
+      dot.setAttribute("r", "4.5");
+      dot.setAttribute("fill", hex);
+      dot.setAttribute("stroke", "rgba(0,0,0,.5)");
+      dot.setAttribute("stroke-width", "1");
+      svg.appendChild(dot);
+      const num = document.createElementNS("http://www.w3.org/2000/svg", "text");
+      num.setAttribute("x", cx); num.setAttribute("y", cy - 9);
+      num.setAttribute("text-anchor", "middle");
+      num.setAttribute("font-size", "9");
+      num.setAttribute("font-weight", "700");
+      num.setAttribute("fill", "#fff");
+      num.setAttribute("stroke", "rgba(0,0,0,.6)");
+      num.setAttribute("stroke-width", "2.5");
+      num.setAttribute("paint-order", "stroke");
+      num.textContent = String(i + 1);
+      svg.appendChild(num);
+    });
+
+    el.toneViz.innerHTML = "";
+    el.toneViz.appendChild(svg);
+  }
+
+  /** 色相環：色相を円環状に配置し、各色をその色相角にプロット */
+  function renderWheelViz() {
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("viewBox", `0 0 ${VIZ_W} ${VIZ_H}`);
+    svg.setAttribute("role", "img");
+    svg.setAttribute("aria-label", "色相環上の現在の配色");
+
+    const cx = VIZ_W / 2, cy = VIZ_H / 2;
+    const rOuter = Math.min(VIZ_W, VIZ_H) / 2 - VIZ_PAD;
     const rInner = rOuter * 0.42;
+    const segs = 36;
 
     // 色相環のセグメント（円環を色相で塗る）
-    for (let i = 0; i < WHEEL_SEGS; i++) {
-      const a0 = (i / WHEEL_SEGS) * 360 - 90;
-      const a1 = ((i + 1) / WHEEL_SEGS) * 360 - 90;
+    for (let i = 0; i < segs; i++) {
+      const a0 = (i / segs) * 360 - 90;
+      const a1 = ((i + 1) / segs) * 360 - 90;
       const large = a1 - a0 > 180 ? 1 : 0;
       const p0 = [cx + rOuter * Math.cos((a0 * Math.PI) / 180), cy + rOuter * Math.sin((a0 * Math.PI) / 180)];
       const p1 = [cx + rOuter * Math.cos((a1 * Math.PI) / 180), cy + rOuter * Math.sin((a1 * Math.PI) / 180)];
@@ -1227,74 +1345,55 @@
       path.setAttribute("d",
         `M ${p0[0]} ${p0[1]} A ${rOuter} ${rOuter} 0 ${large} 1 ${p1[0]} ${p1[1]} ` +
         `L ${p2[0]} ${p2[1]} A ${rInner} ${rInner} 0 ${large} 0 ${p3[0]} ${p3[1]} Z`);
-      path.setAttribute("fill", hslToHex((i / WHEEL_SEGS) * 360, 90, 55));
+      path.setAttribute("fill", hslToHex((i / segs) * 360, 90, 55));
       path.setAttribute("stroke", "rgba(0,0,0,.25)");
       path.setAttribute("stroke-width", "0.5");
       svg.appendChild(path);
     }
 
-    // 基準色相マーカー（中心から外縁への線と、外縁の点）
-    wheelMarkerLine = document.createElementNS("http://www.w3.org/2000/svg", "line");
-    wheelMarkerLine.setAttribute("x1", cx); wheelMarkerLine.setAttribute("y1", cy);
-    wheelMarkerLine.setAttribute("stroke", "#fff");
-    wheelMarkerLine.setAttribute("stroke-width", "2.5");
-    wheelMarkerLine.setAttribute("stroke-linecap", "round");
-    svg.appendChild(wheelMarkerLine);
-    wheelMarkerDot = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-    wheelMarkerDot.setAttribute("r", "7");
-    wheelMarkerDot.setAttribute("fill", "#fff");
-    wheelMarkerDot.setAttribute("stroke", "#101215");
-    wheelMarkerDot.setAttribute("stroke-width", "2");
-    svg.appendChild(wheelMarkerDot);
+    // 各パレット色をその色相角にプロット（彩度で半径を変える）
+    state.cards.forEach((card, i) => {
+      const hex = cardHex(card);
+      const ang = (card.h - 90) * (Math.PI / 180);
+      const r = rInner + (card.s / 100) * (rOuter - rInner);
+      const px = cx + r * Math.cos(ang);
+      const py = cy + r * Math.sin(ang);
+      const ring = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+      ring.setAttribute("cx", px); ring.setAttribute("cy", py);
+      ring.setAttribute("r", "7");
+      ring.setAttribute("fill", "none");
+      ring.setAttribute("stroke", "#fff");
+      ring.setAttribute("stroke-width", "2");
+      svg.appendChild(ring);
+      const dot = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+      dot.setAttribute("cx", px); dot.setAttribute("cy", py);
+      dot.setAttribute("r", "4.5");
+      dot.setAttribute("fill", hex);
+      dot.setAttribute("stroke", "rgba(0,0,0,.5)");
+      dot.setAttribute("stroke-width", "1");
+      svg.appendChild(dot);
+      const num = document.createElementNS("http://www.w3.org/2000/svg", "text");
+      num.setAttribute("x", px); num.setAttribute("y", py - 9);
+      num.setAttribute("text-anchor", "middle");
+      num.setAttribute("font-size", "9");
+      num.setAttribute("font-weight", "700");
+      num.setAttribute("fill", "#fff");
+      num.setAttribute("stroke", "rgba(0,0,0,.6)");
+      num.setAttribute("stroke-width", "2.5");
+      num.setAttribute("paint-order", "stroke");
+      num.textContent = String(i + 1);
+      svg.appendChild(num);
+    });
 
     el.wheelViz.innerHTML = "";
     el.wheelViz.appendChild(svg);
-
-    // クリック／ドラッグで基準色相を選択
-    let dragging = false;
-    const setHue = (e) => {
-      const rect = svg.getBoundingClientRect();
-      const scale = rect.width / WHEEL_SIZE;
-      const x = (e.clientX - rect.left) / scale - cx;
-      const y = (e.clientY - rect.top) / scale - cy;
-      state.baseHue = normalizeHue(Math.atan2(y, x) * 180 / Math.PI + 90);
-      regenerate();
-      render();
-    };
-    svg.addEventListener("pointerdown", (e) => {
-      dragging = true;
-      svg.setPointerCapture(e.pointerId);
-      setHue(e);
-    });
-    svg.addEventListener("pointermove", (e) => { if (dragging) setHue(e); });
-    const end = (e) => {
-      if (!dragging) return;
-      dragging = false;
-      if (svg.hasPointerCapture(e.pointerId)) svg.releasePointerCapture(e.pointerId);
-      pushHistory();
-    };
-    svg.addEventListener("pointerup", end);
-    svg.addEventListener("pointercancel", end);
-  }
-
-  /** 基準色相マーカーの位置を現在の baseHue に合わせる */
-  function updateWheel() {
-    if (!wheelMarkerLine || !wheelMarkerDot) return;
-    const cx = WHEEL_SIZE / 2, cy = WHEEL_SIZE / 2;
-    const rOuter = WHEEL_SIZE / 2 - WHEEL_PAD;
-    const ang = (state.baseHue - 90) * (Math.PI / 180);
-    const mx = cx + rOuter * Math.cos(ang);
-    const my = cy + rOuter * Math.sin(ang);
-    wheelMarkerLine.setAttribute("x2", mx);
-    wheelMarkerLine.setAttribute("y2", my);
-    wheelMarkerDot.setAttribute("cx", mx);
-    wheelMarkerDot.setAttribute("cy", my);
   }
 
   /* =========================================================================
    * 14. レンダリング（コントロール・パレット・エクスポート・履歴）
    * ========================================================================= */
   function renderControls() {
+    el.hue.value = String(round(state.baseHue));
     el.hueValue.textContent = round(state.baseHue) + "°";
     el.count.value = String(state.count);
     el.countValue.textContent = state.count + " 色";
@@ -1397,7 +1496,8 @@
 
   function render() {
     renderControls();
-    updateWheel();
+    renderToneViz();
+    renderWheelViz();
     renderPalette();
     renderSite();
     renderExportTabs();
@@ -1495,7 +1595,13 @@
     bindSectionToggle(el.toggleExport, el.exportBody);
     bindSectionToggle(el.toggleHistory, el.historyBody);
 
-    // 色相は色相環（buildWheel 内）でクリック／ドラッグにより変更する
+    // 色相スライダー：ドラッグ中は履歴に積まず、確定時のみ記録する
+    el.hue.addEventListener("input", (e) => {
+      state.baseHue = normalizeHue(parseInt(e.target.value, 10));
+      regenerate();
+      render();
+    });
+    el.hue.addEventListener("change", pushHistory);
 
     el.count.addEventListener("input", (e) => {
       state.count = clamp(parseInt(e.target.value, 10), MIN_COLORS, MAX_COLORS);
@@ -1545,6 +1651,8 @@
       else if (target.dataset.act === "adjust-l") state.cards[index].l = value;
       else return;
       renderPalette();
+      renderToneViz();
+      renderWheelViz();
       renderSite();
       renderExportTabs();
       // 調整中のスライダーにフォーカスを戻す（再描画で失われるため）
@@ -1571,7 +1679,6 @@
   function init() {
     buildToneMap();
     buildRuleSelect();
-    buildWheel();
     bindEvents();
     applyQuery();
     regenerate();
