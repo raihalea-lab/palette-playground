@@ -1038,29 +1038,42 @@
    *     その色をドラッグしても付いてくる。
    * ========================================================================= */
   const ROLES = [
-    { id: "base",      label: "背景" },
-    { id: "text",      label: "本文" },
-    { id: "accent",    label: "アクセント" },
-    { id: "secondary", label: "サブ" },
+    { id: "base",      label: "背景" },      // ページの地
+    { id: "surface",   label: "面" },        // カード・ナビなどの面
+    { id: "text",      label: "本文" },      // 見出しと本文
+    { id: "accent",    label: "アクセント" }, // 主要ボタン・CTA
+    { id: "secondary", label: "サブ" },      // サブのボタン・図版
+    { id: "highlight", label: "強調" },      // バッジ・タグ・数値など小さな強調
   ];
 
   function assignRoles() {
     const idx = state.cards.map((_, i) => i);
-    if (!idx.length) { state.roles = { base: 0, text: 0, accent: 0, secondary: 0 }; return; }
-    const byL = [...idx].sort((a, b) => state.cards[a].l - state.cards[b].l);
+    if (!idx.length) {
+      state.roles = ROLES.reduce((acc, r) => ({ ...acc, [r.id]: 0 }), {});
+      return;
+    }
+    const lightnessOf = (i) => state.cards[i].l;
+    const byL = [...idx].sort((a, b) => lightnessOf(a) - lightnessOf(b));
     const base = byL[byL.length - 1];  // 最も明るい色を背景に
     const text = byL[0];               // 最も暗い色を文字に
-    // アクセントは最も彩度の高い色。ただし背景と同じ色になると面が沈むので、
-    // 色数が少ないときは「背景以外」を優先する。
-    const mostVivid = (list) => list.reduce((a, i) => (state.cards[i].s > state.cards[a].s ? i : a), list[0]);
-    const free = (i) => i !== base && i !== text;
-    const accent = mostVivid(idx.filter(free))
-      ?? mostVivid(idx.filter((i) => i !== base))
-      ?? base;
-    const secondary = idx.find((i) => free(i) && i !== accent)
-      ?? idx.find((i) => i !== base && i !== accent)
-      ?? accent;
-    state.roles = { base, text, accent, secondary };
+
+    // まだ役割の付いていない色から選ぶ。尽きたら指定の代役を使う。
+    const used = new Set([base, text]);
+    const rest = () => idx.filter((i) => !used.has(i));
+    const vivid = (pool) => (pool.length ? pool.reduce((a, i) => (state.cards[i].s > state.cards[a].s ? i : a), pool[0]) : null);
+    const take = (i) => { if (i != null) used.add(i); return i; };
+
+    // アクセントは最も彩度の高い色。背景と同じ色だと面が沈むので、少ない色数では背景以外を優先する
+    const accent = take(vivid(rest()) ?? vivid(idx.filter((i) => i !== base)) ?? base);
+    const secondary = take(vivid(rest()) ?? accent);
+    // 面は、残りのうち背景に明度が近い色（地から浮きすぎないように）
+    const pool = rest();
+    const surface = take(pool.length
+      ? pool.reduce((a, i) => (Math.abs(lightnessOf(i) - lightnessOf(base)) < Math.abs(lightnessOf(a) - lightnessOf(base)) ? i : a), pool[0])
+      : base);
+    const highlight = vivid(rest()) ?? accent;
+
+    state.roles = { base, surface, text, accent, secondary, highlight };
   }
 
   /**
@@ -1071,10 +1084,18 @@
     return ROLES.filter((r) => state.roles[r.id] === index).map((r) => r.label).join("・");
   }
 
-  /** その色が次に取る役割（背景 → 本文 → アクセント → サブ → 背景…） */
+  /**
+   * その色が次に取る役割（ROLES の並び順に一巡する）。
+   * すでに持っている役割は飛ばす（押しても何も変わらない状態を避ける）。
+   */
   function nextRoleId(index) {
-    const mine = ROLES.findIndex((r) => state.roles[r.id] === index);
-    return ROLES[(mine + 1) % ROLES.length].id;   // 役割がなければ先頭（背景）から
+    const owned = ROLES.map((r) => state.roles[r.id] === index);
+    const from = owned.lastIndexOf(true);   // 持っていなければ -1 → 先頭（背景）から
+    for (let step = 1; step <= ROLES.length; step++) {
+      const at = (from + step) % ROLES.length;
+      if (!owned[at]) return ROLES[at].id;
+    }
+    return ROLES[0].id;
   }
 
   /**
@@ -1336,10 +1357,12 @@
   function buildSiteRoles() {
     const list = state.cards.map(colorDetails);
     const pick = (role) => list[clamp(state.roles[role] || 0, 0, list.length - 1)] || list[0];
-    const baseColor = pick("base");       // 背景と面のもとになる色
-    const textColor = pick("text");       // 文字の色
-    const accent = pick("accent");        // 主要ボタンなどのアクセント
-    const secondary = pick("secondary");  // サブのアクセント
+    const baseColor = pick("base");        // 背景のもとになる色
+    const surfaceColor = pick("surface");  // カード・ナビなどの面
+    const textColor = pick("text");        // 文字の色
+    const accent = pick("accent");         // 主要ボタンなどのアクセント
+    const secondary = pick("secondary");   // サブのアクセント
+    const highlight = pick("highlight");   // バッジ・タグなど小さな強調
 
     // 背景が明るいか暗いかは、背景役の色の明度で判定する
     const isLight = baseColor.l >= 55;
@@ -1353,13 +1376,11 @@
     // 文字は文字役の色。背景とのコントラストが足りないときだけ白黒に逃がす
     const text = contrastRatio(bg, textColor.hex) >= WCAG.AA ? textColor.hex : bestTextOn(bg);
 
-    // 面（カード・ナビ）は背景から一段だけずらす
-    const surface = isLight
-      ? hslToHex(bgHsl.h, bgHsl.s, clamp(bgHsl.l - 5, 0, 100))
-      : hslToHex(bgHsl.h, bgHsl.s, clamp(bgHsl.l + 5, 0, 100));
-    const surfaceAlt = isLight
-      ? hslToHex(bgHsl.h, bgHsl.s, clamp(bgHsl.l - 10, 0, 100))
-      : hslToHex(bgHsl.h, bgHsl.s, clamp(bgHsl.l + 10, 0, 100));
+    // 面（カード・ナビ）は面役の色相を使い、彩度を抑えて背景から一段ずらす
+    const surfaceS = clamp(surfaceColor.s * (isLight ? 0.35 : 0.45), 0, isLight ? 22 : 28);
+    const surfaceL = (step) => (isLight ? clamp(bgHsl.l - step, 0, 100) : clamp(bgHsl.l + step, 0, 100));
+    const surface = hslToHex(surfaceColor.h, surfaceS, surfaceL(5));
+    const surfaceAlt = hslToHex(surfaceColor.h, surfaceS, surfaceL(10));
 
     const border = mixHex(text, bg, 0.82);
     const textMuted = mixHex(text, bg, 0.42);
@@ -1367,7 +1388,22 @@
     const secondaryFg = bestTextOn(secondary.hex);
     const cardText = contrastRatio(surface, text) >= WCAG.AA ? text : bestTextOn(surface);
 
-    return { bg, surface, surfaceAlt, text, textMuted, border, accent, accentFg, secondary, secondaryFg, cardText, list };
+    // 強調は小さな文字にも使うので、読めないときはアクセントか文字色に逃がす
+    const readable = (hex, on) => {
+      if (contrastRatio(hex, on) >= WCAG.AA_LARGE) return hex;
+      if (contrastRatio(accent.hex, on) >= WCAG.AA_LARGE) return accent.hex;
+      return bestTextOn(on);
+    };
+    const highlightOnBg = readable(highlight.hex, bg);
+    const highlightOnSurface = readable(highlight.hex, surface);
+    const highlightOnSurfaceAlt = readable(highlight.hex, surfaceAlt);
+    const highlightFg = bestTextOn(highlight.hex);
+
+    return {
+      bg, surface, surfaceAlt, text, textMuted, border, cardText,
+      accent, accentFg, secondary, secondaryFg,
+      highlight, highlightFg, highlightOnBg, highlightOnSurface, highlightOnSurfaceAlt, list,
+    };
   }
 
   /* =========================================================================
@@ -1405,7 +1441,7 @@
       { n: "99.9%", l: "稼働率" },
       { n: "4.9/5", l: "満足度" },
       { n: "38%", l: "生産性向上" },
-    ].map((s) => `<div class="stat"><b>${s.n}</b><span>${s.l}</span></div>`).join("");
+    ].map((s) => `<div class="stat"><b style="color:${r.highlightOnSurface}">${s.n}</b><span>${s.l}</span></div>`).join("");
 
     const quotes = [
       { q: "導入からわずか1ヶ月で、チームの会議時間が半分になりました。まさに革命です。", n: "佐藤 美咲", r: "株式会社テック プロダクトマネージャー", a: "佐" },
@@ -1413,7 +1449,7 @@
       { q: "サポートの質も素晴らしく、導入時の不安は一切ありませんでした。", n: "鈴木 由紀", r: "株式会社フロー 開発リード", a: "鈴" },
     ].map((t) => `
       <div class="quote-card" style="background:${r.surface};color:${r.cardText}">
-        <div class="stars" style="color:${r.accent.hex}">★★★★★</div>
+        <div class="stars" style="color:${r.highlightOnSurface}">★★★★★</div>
         <blockquote>${t.q}</blockquote>
         <div class="quote-who">
           <span class="quote-av" style="background:${r.secondary.hex};color:${r.secondaryFg}">${t.a}</span>
@@ -1459,7 +1495,7 @@
         </nav>
 
         <header class="hero">
-          <span class="hero-badge" style="background:${r.surfaceAlt};color:${r.accent.hex};border:1px solid ${r.border}">✨ 新機能リリース</span>
+          <span class="hero-badge" style="background:${r.surfaceAlt};color:${r.highlightOnSurfaceAlt};border:1px solid ${r.border}">✨ 新機能リリース</span>
           <h1>チームの生産性を<br>次のレベルへ</h1>
           <p class="lead">Lumina は、プロジェクトの計画・実行・分析をひとつにまとめるオールインワンのワークスペースです。</p>
           <div class="hero-cta">
@@ -1470,6 +1506,7 @@
             <div class="hv-top">
               <span class="hv-dot" style="background:${r.accent.hex}"></span>
               <span class="hv-dot" style="background:${r.secondary.hex}"></span>
+              <span class="hv-dot" style="background:${r.highlight.hex}"></span>
               <span class="hv-dot" style="background:${r.border}"></span>
             </div>
             <div class="hv-grid">
@@ -1587,7 +1624,7 @@
       ["Letters", "On the tyranny of pure black", "Readers write in defence of the warm near-black that this paper has used since 1971."],
     ].map(([tag, title, lead]) => `
       <article class="paper-item" style="border-bottom-color:${r.border}">
-        <span class="paper-tag" style="color:${r.accent.hex}">${tag}</span>
+        <span class="paper-tag" style="color:${r.highlightOnBg}">${tag}</span>
         <h4>${title}</h4>
         <p style="color:${r.textMuted}">${lead}</p>
       </article>`).join("");
@@ -1598,7 +1635,7 @@
       ["Opinion", "In Defence of the Muted Palette", "Restraint is not the absence of colour. It is the decision to spend it in one place.", 12],
     ].map(([tag, title, body, page]) => `
       <section>
-        <span class="paper-tag" style="color:${r.accent.hex}">${tag}</span>
+        <span class="paper-tag" style="color:${r.highlightOnBg}">${tag}</span>
         <h3>${title}</h3>
         <p style="color:${r.textMuted}">${body}</p>
         <p style="color:${r.textMuted}">Continued on page ${page}</p>
@@ -1645,13 +1682,13 @@
             </div>
 
             <aside class="paper-aside" style="border-left-color:${r.border}">
-              <h3 style="border-bottom-color:${r.accent.hex}">In Brief</h3>
+              <h3 style="border-bottom-color:${r.highlight.hex}">In Brief</h3>
               ${briefs}
               <div class="paper-quote" style="background:${r.surfaceAlt};color:${r.cardText};margin-top:14px;font-style:normal;font-size:12px">
                 <strong>Weather.</strong> Overcast, with long shadows by four o'clock. Winds light from the north-east.
               </div>
               <div class="paper-ad" style="border-color:${r.text};color:${r.text}">
-                <span class="paper-tag" style="color:${r.accent.hex}">Advertisement</span>
+                <span class="paper-tag" style="color:${r.highlightOnSurfaceAlt}">Advertisement</span>
                 <strong>MORTIMER &amp; SONS</strong>
                 <span>Inks, varnishes and fine papers<br>Since 1894 — Ludgate Hill</span>
               </div>
