@@ -38,7 +38,7 @@
   /* ===== フローティングパネル（サンプルWebサイトの上に重ねる） ===== */
   .float-panel {
     position: fixed; top: 16px; left: 16px; z-index: 40;
-    width: 372px; max-width: calc(100vw - 32px);
+    width: 560px; max-width: calc(100vw - 32px);
     background: var(--bg-elev); border: 1px solid var(--line);
     border-radius: var(--radius); box-shadow: 0 18px 56px rgba(0,0,0,.5);
     display: flex; flex-direction: column; max-height: calc(100vh - 32px);
@@ -47,10 +47,13 @@
   .float-head {
     display: flex; align-items: center; justify-content: space-between; gap: 10px;
     padding: 12px 14px; border-bottom: 1px solid var(--line); flex: none;
+    cursor: grab; user-select: none; touch-action: none;
   }
+  .float-head:active { cursor: grabbing; }
+  .float-head.dragging { opacity: .85; }
   .float-head h1 { font-size: 15px; margin: 0; letter-spacing: .02em; line-height: 1.3; }
   .float-head p { margin: 2px 0 0; font-size: 11px; color: var(--fg-dim); }
-  .float-actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+  .float-actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; justify-content: flex-end; cursor: auto; }
   .float-body {
     overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 14px;
   }
@@ -58,9 +61,10 @@
   .float-panel.collapsed .float-body { display: none; }
   .float-panel.collapsed .float-head { border-bottom: 0; }
   .collapse-btn { flex: none; }
+  .drag-grip { flex: none; color: var(--fg-dim); font-size: 14px; line-height: 1; padding: 0 2px; }
 
   /* ===== 色の関係ビジュアライゼーション（トーンマップ・色相環） ===== */
-  .viz-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .viz-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
   @media (max-width: 460px) { .viz-grid { grid-template-columns: 1fr; } }
   .viz { display: flex; flex-direction: column; gap: 6px; }
   .viz-label { font-size: 11px; color: var(--fg-muted); font-weight: 700; letter-spacing: .04em; }
@@ -158,15 +162,16 @@
   .row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
   @media (max-width: 620px) { .row-2 { grid-template-columns: 1fr; } }
 
-  /* ===== パレット ===== */
-  .palette { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+  /* ===== パレット（横に広いカード） ===== */
+  .palette { display: grid; grid-template-columns: 1fr; gap: 10px; }
   .card {
     background: var(--bg-elev); border: 1px solid var(--line);
-    border-radius: var(--radius); overflow: hidden; display: flex; flex-direction: column;
+    border-radius: var(--radius); overflow: hidden;
+    display: grid; grid-template-columns: 96px 1fr; align-items: stretch;
   }
   .card.locked { border-color: var(--line-strong); box-shadow: inset 0 0 0 1px var(--line-strong); }
   .swatch {
-    border: 0; width: 100%; height: 84px; cursor: pointer; display: block;
+    border: 0; width: 100%; height: 100%; min-height: 84px; cursor: pointer; display: block;
     position: relative; padding: 0;
   }
   .swatch::after {
@@ -174,7 +179,7 @@
     font-size: 11px; opacity: 0; transition: opacity .15s; color: inherit;
   }
   .swatch:hover::after, .swatch:focus-visible::after { opacity: .8; }
-  .card-body { padding: 9px 10px 11px; display: flex; flex-direction: column; gap: 6px; }
+  .card-body { padding: 9px 12px 11px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
   .card-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
   .hex { font-family: var(--mono); font-size: 14px; font-weight: 700; letter-spacing: .02em; }
   .tone-badge {
@@ -199,6 +204,18 @@
   .adjust input[type=range] { width: 100%; accent-color: var(--accent); margin: 0; }
   .card-actions { display: flex; gap: 6px; }
   .card-actions .btn { flex: 1; }
+
+  /* ===== 折りたたみセクション（パレット・エクスポート・履歴） ===== */
+  .section-toggle {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    width: 100%; background: transparent; border: 0; padding: 0; cursor: pointer;
+    font-size: 13px; text-transform: uppercase; letter-spacing: .08em;
+    color: var(--fg-muted); font-weight: 700; text-align: left;
+  }
+  .section-toggle .caret { font-size: 11px; color: var(--fg-dim); transition: transform .15s; }
+  .section-toggle[aria-expanded="true"] .caret { transform: rotate(90deg); }
+  .section-body { margin-top: 12px; }
+  .section-body[hidden] { display: none; }
 
   /* ===== エクスポート ===== */
   .tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
@@ -379,7 +396,8 @@
   <!-- ===== フローティングパネル（配色コントロール） ===== -->
   <div class="float-panel" id="float-panel" aria-label="配色コントロール">
 
-    <div class="float-head">
+    <div class="float-head" id="float-head">
+      <span class="drag-grip" aria-hidden="true">⠿</span>
       <div>
         <h1>Hue &amp; Tone Palette Playground</h1>
         <p><span class="kbd">Space</span> でランダム生成</p>
@@ -447,11 +465,8 @@
           <div class="tone-map" id="tone-map" role="group" aria-label="トーンマップ"></div>
           <div class="tone-axis"><span>← 低彩度</span><span>上：明るい／下：暗い</span><span>高彩度 →</span></div>
         </div>
-      </section>
 
-      <section class="panel" aria-labelledby="ttl-relations">
-        <h2 id="ttl-relations">色の関係</h2>
-        <div class="viz-grid">
+        <div class="viz-grid" style="margin-top:16px">
           <div class="viz">
             <span class="viz-label">トーンマップ</span>
             <div id="tone-viz"></div>
@@ -465,25 +480,37 @@
         </div>
       </section>
 
-      <section class="panel" aria-labelledby="ttl-palette">
-        <h2 id="ttl-palette">パレット</h2>
-        <div class="palette" id="palette"></div>
-      </section>
-
-      <section class="panel" aria-labelledby="ttl-export">
-        <h2 id="ttl-export">エクスポート</h2>
-        <div class="tabs" id="export-tabs" role="tablist"></div>
-        <pre class="code" id="export-code" tabindex="0"></pre>
-        <div class="export-actions">
-          <button class="btn" id="btn-copy-export" type="button">コピー</button>
-          <button class="btn ghost" id="btn-share-2" type="button">共有URLをコピー</button>
+      <section class="panel" aria-labelledby="toggle-palette">
+        <button class="section-toggle" id="toggle-palette" type="button" aria-expanded="false">
+          <span>パレット</span><span class="caret">▶</span>
+        </button>
+        <div class="section-body" id="palette-body" hidden>
+          <div class="palette" id="palette"></div>
         </div>
       </section>
 
-      <section class="panel" aria-labelledby="ttl-history">
-        <h2 id="ttl-history">履歴（直近 10 件）</h2>
-        <div class="history" id="history"></div>
-        <p class="empty" id="history-empty">まだ履歴はありません。</p>
+      <section class="panel" aria-labelledby="toggle-export">
+        <button class="section-toggle" id="toggle-export" type="button" aria-expanded="false">
+          <span>エクスポート</span><span class="caret">▶</span>
+        </button>
+        <div class="section-body" id="export-body" hidden>
+          <div class="tabs" id="export-tabs" role="tablist"></div>
+          <pre class="code" id="export-code" tabindex="0"></pre>
+          <div class="export-actions">
+            <button class="btn" id="btn-copy-export" type="button">コピー</button>
+            <button class="btn ghost" id="btn-share-2" type="button">共有URLをコピー</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel" aria-labelledby="toggle-history">
+        <button class="section-toggle" id="toggle-history" type="button" aria-expanded="false">
+          <span>履歴（直近 10 件）</span><span class="caret">▶</span>
+        </button>
+        <div class="section-body" id="history-body" hidden>
+          <div class="history" id="history"></div>
+          <p class="empty" id="history-empty">まだ履歴はありません。</p>
+        </div>
       </section>
 
     </div>
@@ -930,7 +957,11 @@
     history: $("history"), historyEmpty: $("history-empty"),
     toast: $("toast"),
     floatPanel: $("float-panel"), floatBody: $("float-body"), btnCollapse: $("btn-collapse"),
+    floatHead: $("float-head"),
     toneViz: $("tone-viz"), wheelViz: $("wheel-viz"),
+    togglePalette: $("toggle-palette"), paletteBody: $("palette-body"),
+    toggleExport: $("toggle-export"), exportBody: $("export-body"),
+    toggleHistory: $("toggle-history"), historyBody: $("history-body"),
   };
 
   /* =========================================================================
@@ -1207,9 +1238,9 @@
    *      現在のパレットの全色を、トーンマップ（彩度×明度）と色相環に
    *      プロットして、色同士の関係を視覚的に把握できるようにする。
    * ========================================================================= */
-  const VIZ_W = 300;
-  const VIZ_H = 210;
-  const VIZ_PAD = 14;
+  const VIZ_W = 460;
+  const VIZ_H = 300;
+  const VIZ_PAD = 16;
 
   /** トーンマップ：背景にトーン領域を現在の色相で塗り、各色を点でプロット */
   function renderToneViz() {
@@ -1404,7 +1435,7 @@
             <span class="hex">${d.hex.toUpperCase()}</span>
             <span class="tone-badge">${d.toneLabel}</span>
           </div>
-          <div class="meta">${d.rgb}<br>${d.hsl}</div>
+          <div class="meta">${d.hsl}</div>
           <div class="contrast">
             <span class="cbadge ${lw.cls}" title="白文字とのコントラスト比">白 ${cw.toFixed(1)} <span class="lvl">${lw.label}</span></span>
             <span class="cbadge ${lb.cls}" title="黒文字とのコントラスト比">黒 ${cb.toFixed(1)} <span class="lvl">${lb.label}</span></span>
@@ -1525,6 +1556,44 @@
       el.btnCollapse.setAttribute("aria-expanded", String(!collapsed));
       el.btnCollapse.title = collapsed ? "パネルを展開する" : "パネルを折りたたむ";
     });
+
+    // パネルのドラッグ移動（ヘッダーを掴んで移動）
+    let dragStart = null;
+    el.floatHead.addEventListener("pointerdown", (e) => {
+      if (e.target.closest("button, input, select, a")) return;
+      dragStart = { x: e.clientX, y: e.clientY, left: el.floatPanel.offsetLeft, top: el.floatPanel.offsetTop };
+      el.floatHead.classList.add("dragging");
+      el.floatHead.setPointerCapture(e.pointerId);
+    });
+    el.floatHead.addEventListener("pointermove", (e) => {
+      if (!dragStart) return;
+      const dx = e.clientX - dragStart.x;
+      const dy = e.clientY - dragStart.y;
+      const maxLeft = Math.max(0, window.innerWidth - el.floatPanel.offsetWidth);
+      const maxTop = Math.max(0, window.innerHeight - el.floatPanel.offsetHeight);
+      el.floatPanel.style.left = Math.min(maxLeft, Math.max(0, dragStart.left + dx)) + "px";
+      el.floatPanel.style.top = Math.min(maxTop, Math.max(0, dragStart.top + dy)) + "px";
+    });
+    const endDrag = (e) => {
+      if (!dragStart) return;
+      dragStart = null;
+      el.floatHead.classList.remove("dragging");
+      if (el.floatHead.hasPointerCapture(e.pointerId)) el.floatHead.releasePointerCapture(e.pointerId);
+    };
+    el.floatHead.addEventListener("pointerup", endDrag);
+    el.floatHead.addEventListener("pointercancel", endDrag);
+
+    // 折りたたみセクション（パレット・エクスポート・履歴）
+    const bindSectionToggle = (btn, body) => {
+      btn.addEventListener("click", () => {
+        const expanded = btn.getAttribute("aria-expanded") === "true";
+        btn.setAttribute("aria-expanded", String(!expanded));
+        body.hidden = expanded;
+      });
+    };
+    bindSectionToggle(el.togglePalette, el.paletteBody);
+    bindSectionToggle(el.toggleExport, el.exportBody);
+    bindSectionToggle(el.toggleHistory, el.historyBody);
 
     // 色相スライダー：ドラッグ中は履歴に積まず、確定時のみ記録する
     el.hue.addEventListener("input", (e) => {
