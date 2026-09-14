@@ -249,6 +249,13 @@
   }
   .card-body { padding: 9px 12px 11px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
   .card-top { display: flex; align-items: center; gap: 6px; min-width: 0; }
+  .card-tags { display: flex; align-items: center; gap: 5px; min-width: 0; }
+  .role-badge {
+    font-size: 10.5px; font-weight: 700; border-radius: 999px; padding: 1px 8px;
+    background: var(--accent); color: var(--on-accent); white-space: nowrap;
+    flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis;
+  }
+  .role-badge[hidden] { display: none; }
   .hex {
     font-family: var(--mono); font-size: 14px; font-weight: 700; letter-spacing: .02em;
     flex: 1 1 auto; min-width: 0;
@@ -1020,6 +1027,46 @@
   }
 
   /* =========================================================================
+   * 5.5 色の役割
+   *     どの色をどこに使うかは、パレットを作り直したときにだけ決める。
+   *     1 色だけを調整したときは役割を入れ替えないので、ボタンの色は
+   *     その色をドラッグしても付いてくる。
+   * ========================================================================= */
+  const ROLES = [
+    { id: "base",      label: "背景" },
+    { id: "text",      label: "本文" },
+    { id: "accent",    label: "アクセント" },
+    { id: "secondary", label: "サブ" },
+  ];
+
+  function assignRoles() {
+    const idx = state.cards.map((_, i) => i);
+    if (!idx.length) { state.roles = { base: 0, text: 0, accent: 0, secondary: 0 }; return; }
+    const byL = [...idx].sort((a, b) => state.cards[a].l - state.cards[b].l);
+    const base = byL[byL.length - 1];  // 最も明るい色を背景に
+    const text = byL[0];               // 最も暗い色を文字に
+    // アクセントは最も彩度の高い色。ただし背景と同じ色になると面が沈むので、
+    // 色数が少ないときは「背景以外」を優先する。
+    const mostVivid = (list) => list.reduce((a, i) => (state.cards[i].s > state.cards[a].s ? i : a), list[0]);
+    const free = (i) => i !== base && i !== text;
+    const accent = mostVivid(idx.filter(free))
+      ?? mostVivid(idx.filter((i) => i !== base))
+      ?? base;
+    const secondary = idx.find((i) => free(i) && i !== accent)
+      ?? idx.find((i) => i !== base && i !== accent)
+      ?? accent;
+    state.roles = { base, text, accent, secondary };
+  }
+
+  /**
+   * その色に割り当てられた役割。色数が少ないと 1 色が複数の役割を兼ねるので、
+   * 該当するものをすべて返す（なければ空文字）。
+   */
+  function roleOf(index) {
+    return ROLES.filter((r) => state.roles[r.id] === index).map((r) => r.label).join("・");
+  }
+
+  /* =========================================================================
    * 6. 状態（DOM からは読み戻さず、常にこの state を唯一の情報源とする）
    * ========================================================================= */
   const state = {
@@ -1034,6 +1081,7 @@
     exportTab: "hex",
     mainPane: "settings",  // 配色設定 / パレット / エクスポート / 履歴のどれを表示しているか
     activeCard: null,      // ドラッグ中・選択中の色（図の塗りの基準にする）
+    roles: { base: 0, text: 0, accent: 0, secondary: 0 },  // 色の役割（インデックス）
     theme: "dark",         // コントロールパネルの配色（dark / light）
     sample: "web",         // プレビューの種類（web / paper）
     history: [],     // 直近の生成結果（メモリ上）
@@ -1054,6 +1102,7 @@
       if (prev && prev.locked) return prev;
       return { h: c.h, s: c.s, l: c.l, locked: false };
     });
+    assignRoles();
   }
 
   /** ランダム生成（固定された項目は変更しない） */
@@ -1074,6 +1123,7 @@
     const snapshot = {
       baseHue: state.baseHue, toneId: state.toneId, ruleId: state.ruleId, count: state.count,
       cards: state.cards.map((c) => ({ ...c })),
+      roles: { ...state.roles },
       hexes: state.cards.map(cardHex),
     };
     const last = state.history[0];
@@ -1092,6 +1142,7 @@
     state.ruleId = item.ruleId;
     state.count = item.count;
     state.cards = item.cards.map((c) => ({ ...c }));
+    if (item.roles) state.roles = { ...item.roles };
     state.activeCard = null;
     render();
     showToast("履歴を復元しました");
@@ -1256,25 +1307,23 @@
    * ========================================================================= */
   function buildSiteRoles() {
     const list = state.cards.map(colorDetails);
-    const byL = [...list].sort((a, b) => a.l - b.l);
-    const lightest = byL[byL.length - 1];
-    const darkest = byL[0];
-    const accent = list.reduce((a, c) => (c.s > a.s ? c : a), list[0]);
-    const secondary = list.find((c) => c.hex !== accent.hex && c.hex !== lightest.hex && c.hex !== darkest.hex) || accent;
+    const pick = (role) => list[clamp(state.roles[role] || 0, 0, list.length - 1)] || list[0];
+    const baseColor = pick("base");       // 背景と面のもとになる色
+    const textColor = pick("text");       // 文字の色
+    const accent = pick("accent");        // 主要ボタンなどのアクセント
+    const secondary = pick("secondary");  // サブのアクセント
 
-    // パレットが明るいか暗いかを、最も明るい色の明度で判定する
-    const isLight = lightest.l >= 55;
+    // 背景が明るいか暗いかは、背景役の色の明度で判定する
+    const isLight = baseColor.l >= 55;
 
-    // 背景は最も明るい色の色相を保ちつつ彩度を抑え、「面」として使えるようにする
+    // 背景は背景役の色相を保ちつつ彩度を抑え、「面」として使えるようにする
     const bgHsl = isLight
-      ? { h: lightest.h, s: clamp(lightest.s * 0.4, 0, 26), l: clamp(lightest.l + 6, 0, 95) }
-      : { h: lightest.h, s: clamp(lightest.s * 0.5, 0, 30), l: clamp(lightest.l - 8, 4, 32) };
+      ? { h: baseColor.h, s: clamp(baseColor.s * 0.4, 0, 26), l: clamp(baseColor.l + 6, 0, 95) }
+      : { h: baseColor.h, s: clamp(baseColor.s * 0.5, 0, 30), l: clamp(baseColor.l - 8, 4, 32) };
     const bg = hslToHex(bgHsl.h, bgHsl.s, bgHsl.l);
 
-    // 文字色：明るい配色なら暗い色、暗い配色なら明るい色（コントラスト不足時は白黒にフォールバック）
-    const text = isLight
-      ? (contrastRatio(bg, darkest.hex) >= WCAG.AA ? darkest.hex : bestTextOn(bg))
-      : (contrastRatio(bg, lightest.hex) >= WCAG.AA ? lightest.hex : bestTextOn(bg));
+    // 文字は文字役の色。背景とのコントラストが足りないときだけ白黒に逃がす
+    const text = contrastRatio(bg, textColor.hex) >= WCAG.AA ? textColor.hex : bestTextOn(bg);
 
     // 面（カード・ナビ）は背景から一段だけずらす
     const surface = isLight
@@ -1805,8 +1854,11 @@
         <div class="card-body">
           <div class="card-top">
             <span class="hex"></span>
-            <span class="tone-badge"></span>
             <button class="lock-btn" type="button" data-act="toggle-lock" data-index="${index}"></button>
+          </div>
+          <div class="card-tags">
+            <span class="role-badge"></span>
+            <span class="tone-badge"></span>
           </div>
           <div class="contrast">
             <span class="cbadge" title="白文字とのコントラスト比"></span>
@@ -1848,6 +1900,13 @@
 
     node.querySelector(".hex").textContent = d.hex.toUpperCase();
     node.querySelector(".tone-badge").textContent = d.toneLabel;
+
+    // この色がプレビューのどこに使われているか
+    const role = roleOf(index);
+    const roleBadge = node.querySelector(".role-badge");
+    roleBadge.textContent = role;
+    roleBadge.hidden = !role;
+    roleBadge.title = role ? `プレビューの「${role}」に使われている色` : "";
 
     const badges = node.querySelectorAll(".cbadge");
     badges[0].className = `cbadge ${lw.cls}`;
