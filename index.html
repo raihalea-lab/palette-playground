@@ -17,10 +17,43 @@
     --fg-muted: #a4adb9;
     --fg-dim: #737d8a;
     --accent: #6f8fb5;
+    --accent-hover: #82a2c7;
+    --on-accent: #0d1116;   /* アクセント色の上に載せる文字 */
+    --fg-invert: #15181c;   /* 文字色を背景に使うときの文字色（選択中のタブなど） */
+    --code-bg: #101317;
+    --code-fg: #cdd6e0;
+    --ok-line: #3f7d54;  --ok-fg: #93d7a8;
+    --warn-line: #7d743f; --warn-fg: #dbcf8f;
+    --ng-line: #7d4444;  --ng-fg: #e0a0a0;
+    --press-bg: #2f3a47;
+    --panel-shadow: 0 18px 56px rgba(0,0,0,.5);
     --radius: 10px;
     --radius-sm: 6px;
     --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
     --sans: system-ui, -apple-system, "Segoe UI", "Hiragino Kaku Gothic ProN", "Noto Sans JP", Meiryo, sans-serif;
+  }
+
+  /* ライトテーマ（コントロールパネルの配色だけを切り替える） */
+  :root[data-theme="light"] {
+    --bg: #e9ecf0;
+    --bg-elev: #ffffff;
+    --bg-elev-2: #f2f4f7;
+    --line: #dde1e7;
+    --line-strong: #b7bfca;
+    --fg: #1b1f25;
+    --fg-muted: #566170;
+    --fg-dim: #7a8593;
+    --accent: #3d6a99;
+    --accent-hover: #355f88;
+    --on-accent: #ffffff;
+    --fg-invert: #ffffff;
+    --code-bg: #f5f7fa;
+    --code-fg: #2a313a;
+    --ok-line: #2f7a4a;  --ok-fg: #1d6b3d;
+    --warn-line: #9a7d2a; --warn-fg: #7a6115;
+    --ng-line: #b4544f;  --ng-fg: #9c3a35;
+    --press-bg: #dde6f1;
+    --panel-shadow: 0 18px 48px rgba(24,32,45,.22);
   }
 
   * { box-sizing: border-box; }
@@ -40,7 +73,7 @@
     position: fixed; top: 16px; left: 16px; z-index: 40;
     width: 1040px; max-width: calc(100vw - 32px);
     background: var(--bg-elev); border: 1px solid var(--line);
-    border-radius: var(--radius); box-shadow: 0 18px 56px rgba(0,0,0,.5);
+    border-radius: var(--radius); box-shadow: var(--panel-shadow);
     display: flex; flex-direction: column; max-height: calc(100vh - 32px);
     overflow: hidden;
   }
@@ -73,8 +106,8 @@
   }
   .btn:hover { background: #303640; }
   .btn:active { transform: translateY(1px); }
-  .btn.primary { background: var(--accent); border-color: var(--accent); color: #0d1116; font-weight: 700; }
-  .btn.primary:hover { background: #82a2c7; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 700; }
+  .btn.primary:hover { background: var(--accent-hover); }
   .btn.small { padding: 5px 10px; font-size: 12.5px; }
   .btn.ghost { background: transparent; }
   :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
@@ -161,7 +194,9 @@
   .wheel-stage { aspect-ratio: 1 / 1; }
   .tone-stage { aspect-ratio: 1.06 / 1; }
   .figure-svg { position: absolute; inset: 0; width: 100%; height: 100%; }
-  .pins { position: absolute; inset: 0; z-index: 2; }
+  /* 重ねたレイヤーが下の丸のクリックを奪わないよう、丸だけが反応するようにする */
+  .pins { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
+  .pin, .handle { pointer-events: auto; }
   .dots-layer { z-index: 3; pointer-events: none; }
 
   .pin {
@@ -180,6 +215,20 @@
   .hue-pin.current { box-shadow: 0 0 0 2px #fff, 0 0 0 4px rgba(0,0,0,.6); z-index: 4; }
 
   .tone-pin { width: 15%; height: 15%; font-size: 10px; }
+
+  /* 色ごとのつまみ（ドラッグでその色だけを変える） */
+  .handles { z-index: 4; }
+  .handle {
+    position: absolute; transform: translate(-50%, -50%);
+    width: 18px; height: 18px; padding: 0; border-radius: 50%;
+    border: 2px solid #fff; box-shadow: 0 0 0 2px rgba(0,0,0,.55);
+    cursor: grab; touch-action: none;
+  }
+  @media (pointer: coarse) { .handle { width: 24px; height: 24px; } }
+  .handle:active { cursor: grabbing; }
+  .handle:hover, .handle.active { width: 24px; height: 24px; z-index: 5; }
+  .handle.active { box-shadow: 0 0 0 2px rgba(0,0,0,.55), 0 0 0 5px var(--accent); }
+  .handle:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; z-index: 6; }
   .tone-pin.current { box-shadow: 0 0 0 2.5px #e2473f, 0 0 0 4.5px rgba(0,0,0,.45); z-index: 4; }
 
   .tone-axis { font-size: 10.5px; color: var(--fg-dim); display: flex; justify-content: space-between; margin-top: 6px; gap: 6px; }
@@ -214,16 +263,16 @@
     background: var(--bg-elev-2); border: 1px solid var(--line-strong);
     border-radius: var(--radius-sm); cursor: pointer; font-size: 12px;
   }
-  .lock-btn[aria-pressed="true"] { border-color: var(--accent); background: #2f3a47; }
+  .lock-btn[aria-pressed="true"] { border-color: var(--accent); background: var(--press-bg); }
   .contrast { display: flex; flex-wrap: wrap; gap: 5px; }
   .cbadge {
     font-size: 10px; font-family: var(--mono); border-radius: 4px; padding: 2px 6px;
     border: 1px solid var(--line-strong); display: inline-flex; gap: 5px; align-items: center;
   }
   .cbadge .lvl { font-weight: 700; }
-  .cbadge.pass-aaa { border-color: #3f7d54; color: #93d7a8; }
-  .cbadge.pass-aa  { border-color: #7d743f; color: #dbcf8f; }
-  .cbadge.fail     { border-color: #7d4444; color: #e0a0a0; }
+  .cbadge.pass-aaa { border-color: var(--ok-line); color: var(--ok-fg); }
+  .cbadge.pass-aa  { border-color: var(--warn-line); color: var(--warn-fg); }
+  .cbadge.fail     { border-color: var(--ng-line); color: var(--ng-fg); }
   .adjust { display: grid; gap: 4px; }
   .adjust label {
     display: grid; grid-template-columns: 18px 1fr 34px; gap: 6px; align-items: center;
@@ -241,11 +290,11 @@
     background: transparent; border: 1px solid var(--line-strong); border-radius: 999px;
     padding: 5px 13px; font-size: 12.5px; cursor: pointer; color: var(--fg-muted);
   }
-  .tab[aria-selected="true"] { background: var(--fg); color: #15181c; border-color: var(--fg); font-weight: 700; }
+  .tab[aria-selected="true"] { background: var(--fg); color: var(--fg-invert); border-color: var(--fg); font-weight: 700; }
   pre.code {
-    background: #101317; border: 1px solid var(--line); border-radius: var(--radius-sm);
+    background: var(--code-bg); border: 1px solid var(--line); border-radius: var(--radius-sm);
     padding: 13px; margin: 0 0 12px; overflow-x: auto;
-    font-family: var(--mono); font-size: 12.5px; line-height: 1.65; color: #cdd6e0;
+    font-family: var(--mono); font-size: 12.5px; line-height: 1.65; color: var(--code-fg);
     max-height: 240px; white-space: pre;
   }
   .export-actions { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -265,7 +314,7 @@
   /* ===== トースト ===== */
   .toast {
     position: fixed; left: 50%; bottom: 26px; transform: translate(-50%, 18px);
-    background: #eef2f7; color: #14171b; font-weight: 700; font-size: 13.5px;
+    background: var(--fg); color: var(--fg-invert); font-weight: 700; font-size: 13.5px;
     padding: 10px 20px; border-radius: 999px; box-shadow: 0 6px 24px rgba(0,0,0,.5);
     opacity: 0; pointer-events: none; transition: opacity .18s, transform .18s; z-index: 50;
     max-width: calc(100vw - 32px); text-align: center;
@@ -275,6 +324,71 @@
   .visually-hidden {
     position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
     overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+  }
+
+  /* ===== サンプル：英字新聞 ===== */
+  .paper { min-height: 100vh; padding: 28px 20px 60px; }
+  .paper-inner {
+    max-width: 1080px; margin: 0 auto;
+    font-family: Georgia, "Times New Roman", "Noto Serif JP", serif;
+  }
+  .paper-masthead { text-align: center; padding-bottom: 10px; }
+  .paper-masthead h1 {
+    margin: 0; font-size: clamp(34px, 7vw, 68px); letter-spacing: .06em;
+    font-weight: 900; line-height: 1;
+  }
+  .paper-sub {
+    display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px;
+    font-size: 11px; letter-spacing: .18em; text-transform: uppercase;
+    padding: 8px 0; margin-top: 12px;
+  }
+  .paper-rule { height: 3px; }
+  .paper-rule.thin { height: 1px; margin-top: 2px; }
+  .paper-lead { display: grid; grid-template-columns: 2.1fr 1fr; gap: 26px; padding: 22px 0; }
+  @media (max-width: 760px) { .paper-lead { grid-template-columns: 1fr; } }
+  .paper-kicker {
+    font-size: 11px; letter-spacing: .22em; text-transform: uppercase;
+    font-weight: 700; margin-bottom: 8px; display: inline-block; padding: 2px 8px;
+  }
+  .paper-lead h2 { margin: 0 0 10px; font-size: clamp(26px, 4vw, 42px); line-height: 1.12; font-weight: 900; }
+  .paper-standfirst { margin: 0 0 16px; font-size: 16px; line-height: 1.5; font-style: italic; }
+  .paper-photo { aspect-ratio: 16 / 8; border-radius: 2px; position: relative; overflow: hidden; }
+  .paper-photo span { position: absolute; }
+  .paper-caption { font-size: 11px; margin-top: 6px; letter-spacing: .04em; }
+  .paper-cols { columns: 2; column-gap: 22px; font-size: 13.5px; line-height: 1.62; margin-top: 14px; }
+  @media (max-width: 560px) { .paper-cols { columns: 1; } }
+  .paper-cols p { margin: 0 0 10px; }
+  .paper-cols p:first-child::first-letter {
+    float: left; font-size: 46px; line-height: .82; padding: 4px 8px 0 0; font-weight: 900;
+  }
+  .paper-aside { border-left-width: 1px; border-left-style: solid; padding-left: 18px; }
+  @media (max-width: 760px) { .paper-aside { border-left: 0; padding-left: 0; } }
+  .paper-aside h3 {
+    margin: 0 0 10px; font-size: 11px; letter-spacing: .2em; text-transform: uppercase;
+    padding-bottom: 6px; border-bottom-width: 2px; border-bottom-style: solid;
+  }
+  .paper-item { padding: 9px 0; border-bottom-width: 1px; border-bottom-style: solid; }
+  .paper-item h4 { margin: 0 0 3px; font-size: 14px; line-height: 1.3; }
+  .paper-item p { margin: 0; font-size: 11.5px; }
+  .paper-quote {
+    margin: 16px 0 0; padding: 14px 16px; font-size: 15px; font-style: italic; line-height: 1.45;
+  }
+  .paper-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; padding: 20px 0; }
+  @media (max-width: 760px) { .paper-grid { grid-template-columns: 1fr; } }
+  .paper-grid h3 { margin: 0 0 8px; font-size: 19px; line-height: 1.2; }
+  .paper-grid p { margin: 0 0 8px; font-size: 13px; line-height: 1.6; }
+  .paper-tag { font-size: 10px; letter-spacing: .18em; text-transform: uppercase; font-weight: 700; }
+  .paper-ad {
+    margin-top: 16px; padding: 14px 12px; text-align: center;
+    border-width: 2px; border-style: double; display: grid; gap: 6px;
+  }
+  .paper-ad strong { font-size: 17px; letter-spacing: .12em; }
+  .paper-ad span:last-child { font-size: 11px; line-height: 1.5; }
+  .paper-strip { display: flex; gap: 0; height: 10px; margin: 18px 0; }
+  .paper-strip span { flex: 1; }
+  .paper-foot {
+    display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px;
+    font-size: 11px; letter-spacing: .12em; text-transform: uppercase; padding-top: 12px;
   }
 
   /* ===== サンプルWebサイト（メイン・ページ全体） ===== */
@@ -421,6 +535,8 @@
         <button class="btn primary small" id="btn-random" type="button"
                 title="ランダム生成（Space キー）">🎲 生成</button>
         <button class="btn small" id="btn-share" type="button" title="共有URLをコピー">🔗 共有</button>
+        <button class="btn small" id="btn-theme" type="button" aria-pressed="false"
+                title="ライト／ダークを切り替える">🌙</button>
         <button class="btn small collapse-btn" id="btn-collapse" type="button"
                 aria-expanded="true" title="パネルを折りたたむ">−</button>
       </div>
@@ -445,6 +561,7 @@
               <svg class="figure-svg" id="wheel-svg" viewBox="0 0 100 100"
                    preserveAspectRatio="none" aria-hidden="true"></svg>
               <div class="pins" id="hue-pins" role="group" aria-label="PCCS 24 色相"></div>
+              <div class="pins handles" id="hue-handles" role="group" aria-label="色ごとの色相つまみ"></div>
             </div>
             <input type="range" class="hue-slider" id="hue" min="0" max="360" step="1" value="0"
                    aria-label="基準色相（0〜360度）">
@@ -464,12 +581,21 @@
               <svg class="figure-svg" id="tone-svg" viewBox="0 0 100 100"
                    preserveAspectRatio="none" aria-hidden="true"></svg>
               <div class="pins" id="tone-pins" role="group" aria-label="トーン"></div>
-              <svg class="figure-svg dots-layer" id="tone-dots" viewBox="0 0 100 100"
-                   preserveAspectRatio="none" aria-hidden="true"></svg>
+              <div class="pins handles" id="tone-handles" role="group" aria-label="色ごとの彩度・明度つまみ"></div>
             </div>
             <div class="tone-axis"><span>← 低彩度</span><span>上：明るい／下：暗い</span><span>高彩度 →</span></div>
           </div>
             <div class="settings-col">
+          <div class="field">
+            <div class="field-head">
+              <span class="field-label">プレビュー</span>
+            </div>
+            <div class="tabs" id="sample-tabs" role="tablist" aria-label="プレビューの種類">
+              <button class="tab" type="button" role="tab" data-sample="web">Web サイト</button>
+              <button class="tab" type="button" role="tab" data-sample="paper">英字新聞</button>
+            </div>
+          </div>
+
           <div class="field">
             <div class="field-head">
               <span class="field-label">配色ルール</span>
@@ -713,7 +839,8 @@
   const toRad = (deg) => (deg * Math.PI) / 180;
 
   /** 色相環の半径と、トーンマップの描画範囲（いずれもステージに対する %） */
-  const WHEEL_R = 39;
+  const WHEEL_R = 39;       // PCCS の丸を並べる半径
+  const HANDLE_R = 27;      // 色ごとのつまみを置く半径（線の上・ピンの内側）
   const TONE_PLOT = { x: [8, 82], y: [10, 88] };
   const TONE_COLS = 4;  // 左ほど低彩度
   const TONE_ROWS = 5;  // 上ほど明るい
@@ -734,6 +861,40 @@
     const dx = clamp((sat - c.s) / Math.max(1, tone.s[1] - tone.s[0]), -0.5, 0.5);
     const dy = clamp((c.l - lig) / Math.max(1, tone.l[1] - tone.l[0]), -0.5, 0.5);
     return { x: cellX(tone.col) + dx * cellW * 0.88, y: cellY(tone.row) + dy * cellH * 0.88 };
+  }
+
+  /** 色相環上の位置（1〜25 の連続値）→ HSL の色相（hueToPccsPos の逆） */
+  function pccsPosToHue(pos) {
+    const n = Math.floor(pos), f = pos - n;
+    const a = PCCS_HUES[(((n - 1) % 24) + 24) % 24];
+    const b = PCCS_HUES[((n % 24) + 24) % 24];
+    const span = normalizeHue(b.h - a.h) || 360;
+    return normalizeHue(a.h + f * span);
+  }
+
+  /** 色相環上の座標（ステージの %）→ 色相 */
+  function posToHue(x, y) {
+    const angle = (Math.atan2(y - 50, x - 50) * 180) / Math.PI;
+    return pccsPosToHue((angle + 90) / 15 + 8);
+  }
+
+  /**
+   * トーンマップ上の座標（ステージの %）→ 彩度・明度。
+   * 最も近いトーンの升目を選び、その中でのずれを彩度・明度のレンジに割り当てる。
+   */
+  function posToTone(x, y) {
+    let best = TONES[0], bestDist = Infinity;
+    for (const t of TONES) {
+      const d = Math.hypot((x - cellX(t.col)) / cellW, (y - cellY(t.row)) / cellH);
+      if (d < bestDist) { bestDist = d; best = t; }
+    }
+    const c = toneCenter(best);
+    const dx = clamp((x - cellX(best.col)) / (cellW * 0.88), -0.5, 0.5);
+    const dy = clamp((y - cellY(best.row)) / (cellH * 0.88), -0.5, 0.5);
+    return {
+      s: clamp(c.s + dx * (best.s[1] - best.s[0]), 0, 100),
+      l: clamp(c.l - dy * (best.l[1] - best.l[0]), 0, 100),
+    };
   }
 
   /** 2 つの色相の差（0〜180） */
@@ -872,6 +1033,9 @@
     cards: [],       // { h, s, l, locked }
     exportTab: "hex",
     mainPane: "settings",  // 配色設定 / パレット / エクスポート / 履歴のどれを表示しているか
+    activeCard: null,      // ドラッグ中・選択中の色（図の塗りの基準にする）
+    theme: "dark",         // コントロールパネルの配色（dark / light）
+    sample: "web",         // プレビューの種類（web / paper）
     history: [],     // 直近の生成結果（メモリ上）
   };
 
@@ -897,6 +1061,7 @@
     if (!state.lockHue) state.baseHue = Math.floor(Math.random() * HUE_MAX);
     if (!state.lockTone) state.toneId = TONES[Math.floor(Math.random() * TONES.length)].id;
     if (!state.lockRule) state.ruleId = RULES[Math.floor(Math.random() * RULES.length)].id;
+    state.activeCard = null;
     regenerate();
     pushHistory();
     render();
@@ -927,6 +1092,7 @@
     state.ruleId = item.ruleId;
     state.count = item.count;
     state.cards = item.cards.map((c) => ({ ...c }));
+    state.activeCard = null;
     render();
     showToast("履歴を復元しました");
   }
@@ -940,6 +1106,7 @@
     p.set("tone", state.toneId);
     p.set("rule", state.ruleId);
     p.set("n", String(state.count));
+    if (state.sample !== "web") p.set("sample", state.sample);
     return p.toString();
   }
 
@@ -951,6 +1118,7 @@
     if (p.get("rule") && RULES.some((r) => r.id === p.get("rule"))) state.ruleId = p.get("rule");
     const n = parseInt(p.get("n"), 10);
     if (Number.isFinite(n)) state.count = clamp(n, MIN_COLORS, MAX_COLORS);
+    if (p.get("sample") === "paper") state.sample = "paper";
   }
 
   const syncUrl = () => history.replaceState(null, "", location.pathname + "?" + stateToQuery());
@@ -1035,7 +1203,8 @@
     toneValue: $("tone-value"), lockTone: $("lock-tone"),
     wheelStage: $("wheel-stage"), wheelSvg: $("wheel-svg"), huePins: $("hue-pins"),
     toneStage: $("tone-stage"), toneSvg: $("tone-svg"), tonePins: $("tone-pins"),
-    toneDots: $("tone-dots"),
+    hueHandles: $("hue-handles"), toneHandles: $("tone-handles"),
+    btnTheme: $("btn-theme"), sampleTabs: $("sample-tabs"),
     palette: $("palette"), site: $("site"),
     exportTabs: $("export-tabs"), exportCode: $("export-code"),
     history: $("history"), historyEmpty: $("history-empty"),
@@ -1127,7 +1296,7 @@
   /* =========================================================================
    * 13. サンプルWebサイトの描画（メイン）
    * ========================================================================= */
-  function renderSite() {
+  function renderWebSample() {
     if (!state.cards.length) { el.site.innerHTML = ""; return; }
     const r = buildSiteRoles();
 
@@ -1318,6 +1487,120 @@
       </div>`;
   }
 
+
+  /** サンプル：英字新聞（同じパレットを紙面の配色として使う） */
+  function renderPaperSample() {
+    if (!state.cards.length) { el.site.innerHTML = ""; return; }
+    const r = buildSiteRoles();
+    const today = new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+    const strip = r.list.map((c) => `<span style="background:${c.hex}"></span>`).join("");
+
+    // 写真に見立てたブロック（パレット色の面と円で構成する）
+    const photo = `
+      <div class="paper-photo" style="background:${r.secondary.hex}">
+        <span style="inset:auto -8% -30% auto; width:58%; height:88%; border-radius:50%; background:${r.accent.hex}"></span>
+        <span style="inset:auto 8% -22% 12%; width:42%; height:70%; border-radius:50% 50% 0 0; background:${r.list[0].hex}"></span>
+        <span style="inset:10% 12% auto auto; width:16%; aspect-ratio:1; border-radius:50%; background:${r.surfaceAlt}"></span>
+      </div>`;
+
+    const briefs = [
+      ["Markets", "Pigment futures climb as studios restock", "A quiet week for volatility, but colourists report longer lead times on lake pigments."],
+      ["Science", "Why the eye forgives a warm grey", "Researchers measure how tone, not hue, carries the mood of a printed page."],
+      ["City", "Printing house reopens after two years", "The letterpress on Marlow Street returns with a restored 1954 flatbed."],
+      ["Letters", "On the tyranny of pure black", "Readers write in defence of the warm near-black that this paper has used since 1971."],
+    ].map(([tag, title, lead]) => `
+      <article class="paper-item" style="border-bottom-color:${r.border}">
+        <span class="paper-tag" style="color:${r.accent.hex}">${tag}</span>
+        <h4>${title}</h4>
+        <p style="color:${r.textMuted}">${lead}</p>
+      </article>`).join("");
+
+    const features = [
+      ["Design", "The Grammar of Tone", "Editors have long argued that a page is read twice — once as words, once as a field of value. The second reading happens first.", 4],
+      ["Culture", "A Century of Broadsheets", "From hot metal to offset, the column has stayed eleven picas wide for reasons nobody can quite defend.", 7],
+      ["Opinion", "In Defence of the Muted Palette", "Restraint is not the absence of colour. It is the decision to spend it in one place.", 12],
+    ].map(([tag, title, body, page]) => `
+      <section>
+        <span class="paper-tag" style="color:${r.accent.hex}">${tag}</span>
+        <h3>${title}</h3>
+        <p style="color:${r.textMuted}">${body}</p>
+        <p style="color:${r.textMuted}">Continued on page ${page}</p>
+      </section>`).join("");
+
+    el.site.innerHTML = `
+      <div class="paper" style="background:${r.bg};color:${r.text}">
+        <div class="paper-inner">
+          <header class="paper-masthead">
+            <div class="paper-rule" style="background:${r.text}"></div>
+            <div class="paper-rule thin" style="background:${r.text}"></div>
+            <h1 style="margin-top:18px">The Chromatic Times</h1>
+            <div class="paper-sub" style="color:${r.textMuted};border-top:1px solid ${r.border};border-bottom:1px solid ${r.border}">
+              <span>Vol. CXVII — No. 284</span>
+              <span>${today}</span>
+              <span>Price: Two Shillings</span>
+            </div>
+          </header>
+
+          <div class="paper-lead">
+            <div>
+              <span class="paper-kicker" style="background:${r.accent.hex};color:${r.accentFg}">Front Page</span>
+              <h2>A Quiet Revolution in How Pages Are Coloured</h2>
+              <p class="paper-standfirst" style="color:${r.textMuted}">
+                Printers and designers are converging on a simple idea: choose the tone first, and let the hue follow.
+              </p>
+              ${photo}
+              <p class="paper-caption" style="color:${r.textMuted}">
+                Above: a study in tone, printed with the same five inks used throughout this issue.
+              </p>
+              <div class="paper-cols">
+                <p>For most of the last century the argument about colour on the printed page was an argument about hue.
+                   Editors asked which red, which blue, which green — and rarely asked how light or how saturated.</p>
+                <p>The new orthodoxy inverts the question. Fix the tone, the reasoning goes, and the page holds together
+                   whatever hue you reach for. A vivid blue and a vivid yellow quarrel far less than a vivid blue and a pale one.</p>
+                <p>“You can change every hue on the page and keep the mood,” said one compositor, who has set this
+                   newspaper for eleven years. “Change the tone and you have made a different paper.”</p>
+                <p>Whether the habit spreads beyond the trade press remains to be seen. For now, the evidence is
+                   in your hands: this issue was set from a single tone, chosen before a single hue.</p>
+              </div>
+              <blockquote class="paper-quote" style="background:${r.surface};color:${r.cardText};border-left:4px solid ${r.accent.hex}">
+                “Colour is the last thing a reader notices and the first thing they feel.”
+              </blockquote>
+            </div>
+
+            <aside class="paper-aside" style="border-left-color:${r.border}">
+              <h3 style="border-bottom-color:${r.accent.hex}">In Brief</h3>
+              ${briefs}
+              <div class="paper-quote" style="background:${r.surfaceAlt};color:${r.cardText};margin-top:14px;font-style:normal;font-size:12px">
+                <strong>Weather.</strong> Overcast, with long shadows by four o'clock. Winds light from the north-east.
+              </div>
+              <div class="paper-ad" style="border-color:${r.text};color:${r.text}">
+                <span class="paper-tag" style="color:${r.accent.hex}">Advertisement</span>
+                <strong>MORTIMER &amp; SONS</strong>
+                <span>Inks, varnishes and fine papers<br>Since 1894 — Ludgate Hill</span>
+              </div>
+            </aside>
+          </div>
+
+          <div class="paper-strip">${strip}</div>
+
+          <div class="paper-grid">${features}</div>
+
+          <div class="paper-rule thin" style="background:${r.border}"></div>
+          <footer class="paper-foot" style="color:${r.textMuted}">
+            <span>The Chromatic Times</span>
+            <span>Printed with ${r.list.length} inks</span>
+            <span>Page 1</span>
+          </footer>
+        </div>
+      </div>`;
+  }
+
+  /** プレビューの種類に応じて描き分ける */
+  function renderSample() {
+    if (state.sample === "paper") renderPaperSample();
+    else renderWebSample();
+  }
+
   /* =========================================================================
    * 13.5 色相環とトーンマップ
    *      PCCS の 2 つの図をそのままコントロールにする。色相環の丸は 24 色相、
@@ -1409,34 +1692,65 @@
       "vector-effect": "non-scaling-stroke",
     }));
 
-    // パレットの各色を、属するトーンの升目に点で重ねる（ピンより前面のレイヤー）
-    const dots = el.toneDots;
-    dots.innerHTML = "";
-    state.cards.forEach((card) => {
+  }
+
+  /** つまみの数をパレットの色数に合わせる（ドラッグ中の要素を作り直さないため差分で） */
+  function syncHandles(container, kind) {
+    while (container.children.length > state.cards.length) container.lastChild.remove();
+    while (container.children.length < state.cards.length) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "handle";
+      b.dataset.kind = kind;
+      b.dataset.index = String(container.children.length);
+      b.title = kind === "hue" ? "ドラッグでこの色の色相を変える" : "ドラッグでこの色のトーンを変える";
+      b.setAttribute("aria-label", b.title);
+      container.appendChild(b);
+    }
+  }
+
+  /** 色ごとのつまみの位置・色・選択状態を更新する */
+  function updateHandles() {
+    syncHandles(el.hueHandles, "hue");
+    syncHandles(el.toneHandles, "tone");
+    state.cards.forEach((card, i) => {
+      const hex = cardHex(card);
+      const rad = toRad(hueToAngle(card.h));
+      const hueHandle = el.hueHandles.children[i];
+      hueHandle.style.left = (50 + Math.cos(rad) * HANDLE_R) + "%";
+      hueHandle.style.top = (50 + Math.sin(rad) * HANDLE_R) + "%";
+      hueHandle.style.background = hex;
+      hueHandle.classList.toggle("active", state.activeCard === i);
+
       const p = colorToTonePos(card.s, card.l);
-      dots.appendChild(svgEl("circle", {
-        cx: p.x, cy: p.y, r: 1.9,
-        fill: cardHex(card), stroke: "rgba(0,0,0,.7)", "stroke-width": 3,
-        "vector-effect": "non-scaling-stroke",
-      }));
-      dots.appendChild(svgEl("circle", {
-        cx: p.x, cy: p.y, r: 1.9,
-        fill: "none", stroke: "#fff", "stroke-width": 1.2,
-        "vector-effect": "non-scaling-stroke",
-      }));
+      const toneHandle = el.toneHandles.children[i];
+      toneHandle.style.left = p.x + "%";
+      toneHandle.style.top = p.y + "%";
+      toneHandle.style.background = hex;
+      toneHandle.classList.toggle("active", state.activeCard === i);
     });
+  }
+
+  /**
+   * 図を塗るときの基準色。色をドラッグ／選択しているあいだはその色を使い、
+   * 選んでいなければ基準色相＋選択中のトーンを使う。
+   */
+  function figureBase() {
+    const card = state.cards[state.activeCard];
+    if (card) return { h: card.h, s: card.s, l: card.l };
+    const c = toneColor(state.baseHue, getTone(state.toneId), 0);
+    return { h: c.h, s: c.s, l: c.l };
   }
 
   /** ピンの色と選択状態を、現在の色相・トーンに合わせて更新する */
   function updatePins() {
-    const tone = getTone(state.toneId);
+    const base = figureBase();
     const usedHues = state.cards.map((c) => c.h);
 
     for (const b of el.huePins.children) {
       const n = Number(b.dataset.hue);
       const hue = pccsToHue(n);
-      const c = toneColor(hue, tone, 0);
-      const hex = hslToHex(c.h, c.s, c.l);
+      const hex = hslToHex(hue, base.s, base.l);
       const used = usedHues.some((h) => hueGap(h, hue) < 7.5);
       const current = hueGap(state.baseHue, hue) < 7.5;
       b.style.background = hex;
@@ -1449,7 +1763,7 @@
 
     for (const b of el.tonePins.children) {
       const t = getTone(b.dataset.tone);
-      const c = toneColor(state.baseHue, t, 0);
+      const c = toneColor(base.h, t, 0);
       const hex = hslToHex(c.h, c.s, c.l);
       b.style.background = hex;
       b.style.color = bestTextOn(hex);
@@ -1462,6 +1776,7 @@
     drawWheelSvg();
     drawToneSvg();
     updatePins();
+    updateHandles();
   }
 
   /* =========================================================================
@@ -1597,6 +1912,30 @@
     });
   }
 
+  /** コントロールパネルの配色（ダーク／ライト）を適用する */
+  function applyTheme() {
+    document.documentElement.dataset.theme = state.theme;
+    el.btnTheme.textContent = state.theme === "dark" ? "🌙" : "☀️";
+    el.btnTheme.setAttribute("aria-pressed", String(state.theme === "light"));
+    el.btnTheme.title = state.theme === "dark" ? "ライトテーマに切り替える" : "ダークテーマに切り替える";
+    try { localStorage.setItem("palette-theme", state.theme); } catch (_) {}
+  }
+
+  /** 前回選んだテーマを引き継ぐ（既定は、生成した色を見比べやすいダーク） */
+  function initialTheme() {
+    try {
+      const saved = localStorage.getItem("palette-theme");
+      if (saved === "light" || saved === "dark") return saved;
+    } catch (_) {}
+    return "dark";
+  }
+
+  function renderSampleTabs() {
+    for (const btn of el.sampleTabs.children) {
+      btn.setAttribute("aria-selected", String(btn.dataset.sample === state.sample));
+    }
+  }
+
   /** パレット・エクスポート・履歴のタブの表示を切り替える */
   function renderMainTabs() {
     for (const btn of el.mainTabs.children) {
@@ -1610,9 +1949,10 @@
   function render() {
     renderControls();
     renderMainTabs();
+    renderSampleTabs();
     renderFigures();
     renderPalette();
-    renderSite();
+    renderSample();
     renderExportTabs();
     renderHistory();
     syncUrl();
@@ -1631,9 +1971,92 @@
   }
 
   function onSettingChange() {
+    state.activeCard = null;
     regenerate();
     pushHistory();
     render();
+  }
+
+  /** ステージ内のポインタ位置を % で返す */
+  function stagePercent(stage, e) {
+    const rect = stage.getBoundingClientRect();
+    return { x: ((e.clientX - rect.left) / rect.width) * 100, y: ((e.clientY - rect.top) / rect.height) * 100 };
+  }
+
+  /** 1 色だけを更新して、図・カード・プレビューに反映する */
+  function applyHandle(index, kind, pos) {
+    const card = state.cards[index];
+    if (!card) return;
+    if (kind === "hue") {
+      card.h = posToHue(pos.x, pos.y);
+    } else {
+      const t = posToTone(pos.x, pos.y);
+      card.s = t.s;
+      card.l = t.l;
+    }
+    state.activeCard = index;
+    renderFigures();
+    updateCard(index);
+    renderSample();
+    renderExportTabs();
+    syncUrl();
+  }
+
+  /** つまみのドラッグとキーボード操作を割り当てる */
+  function bindHandles(stage, container) {
+    let dragging = null;
+
+    container.addEventListener("pointerdown", (e) => {
+      const handle = e.target.closest(".handle");
+      if (!handle || e.button !== 0) return;
+      dragging = { index: Number(handle.dataset.index), kind: handle.dataset.kind };
+      state.activeCard = dragging.index;
+      renderFigures();
+      try { handle.setPointerCapture(e.pointerId); } catch (_) {}
+      e.preventDefault();
+    });
+
+    container.addEventListener("pointermove", (e) => {
+      if (!dragging) return;
+      applyHandle(dragging.index, dragging.kind, stagePercent(stage, e));
+    });
+
+    const finish = () => { if (dragging) { dragging = null; pushHistory(); } };
+    container.addEventListener("pointerup", finish);
+    container.addEventListener("pointercancel", finish);
+    container.addEventListener("lostpointercapture", finish);
+
+    // 矢印キーでも微調整できるようにする
+    container.addEventListener("keydown", (e) => {
+      const handle = e.target.closest(".handle");
+      if (!handle) return;
+      const step = e.shiftKey ? 5 : 1;
+      const index = Number(handle.dataset.index);
+      const card = state.cards[index];
+      if (!card) return;
+      let moved = true;
+      if (handle.dataset.kind === "hue") {
+        if (e.key === "ArrowRight" || e.key === "ArrowUp") card.h = normalizeHue(card.h + step);
+        else if (e.key === "ArrowLeft" || e.key === "ArrowDown") card.h = normalizeHue(card.h - step);
+        else moved = false;
+      } else {
+        if (e.key === "ArrowRight") card.s = clamp(card.s + step, 0, 100);
+        else if (e.key === "ArrowLeft") card.s = clamp(card.s - step, 0, 100);
+        else if (e.key === "ArrowUp") card.l = clamp(card.l + step, 0, 100);
+        else if (e.key === "ArrowDown") card.l = clamp(card.l - step, 0, 100);
+        else moved = false;
+      }
+      if (!moved) return;
+      e.preventDefault();
+      state.activeCard = index;
+      renderFigures();
+      updateCard(index);
+      renderSample();
+      renderExportTabs();
+      syncUrl();
+      pushHistory();
+      container.children[index].focus();
+    });
   }
 
   function bindEvents() {
@@ -1706,11 +2129,12 @@
     el.lockTone.addEventListener("change", (e) => { state.lockTone = e.target.checked; });
     el.lockRule.addEventListener("change", (e) => { state.lockRule = e.target.checked; });
 
-    // 図のピンをクリックして色相・トーンを選ぶ
+    // 図のピンをクリックして、パレット全体の色相・トーンを選ぶ
     el.huePins.addEventListener("click", (e) => {
       const btn = e.target.closest(".hue-pin");
       if (!btn) return;
       state.baseHue = pccsToHue(Number(btn.dataset.hue));
+      state.activeCard = null;
       onSettingChange();
     });
 
@@ -1718,7 +2142,26 @@
       const btn = e.target.closest(".tone-pin");
       if (!btn) return;
       state.toneId = btn.dataset.tone;
+      state.activeCard = null;
       onSettingChange();
+    });
+
+    // 色ごとのつまみ：ドラッグでその 1 色だけを変える
+    bindHandles(el.wheelStage, el.hueHandles);
+    bindHandles(el.toneStage, el.toneHandles);
+
+    el.btnTheme.addEventListener("click", () => {
+      state.theme = state.theme === "dark" ? "light" : "dark";
+      applyTheme();
+    });
+
+    el.sampleTabs.addEventListener("click", (e) => {
+      const btn = e.target.closest(".tab");
+      if (!btn) return;
+      state.sample = btn.dataset.sample;
+      renderSampleTabs();
+      renderSample();
+      syncUrl();
     });
 
     el.exportTabs.addEventListener("click", (e) => {
@@ -1752,7 +2195,7 @@
       else return;
       updateCard(index);
       renderFigures();
-      renderSite();
+      renderSample();
       renderExportTabs();
     });
 
@@ -1773,6 +2216,8 @@
   }
 
   function init() {
+    state.theme = initialTheme();
+    applyTheme();
     buildFigures();
     buildRuleSelect();
     bindEvents();
