@@ -38,21 +38,20 @@
   /* ===== フローティングパネル（サンプルWebサイトの上に重ねる） ===== */
   .float-panel {
     position: fixed; top: 16px; left: 16px; z-index: 40;
-    width: 560px; max-width: calc(100vw - 32px);
+    width: 1040px; max-width: calc(100vw - 32px);
     background: var(--bg-elev); border: 1px solid var(--line);
     border-radius: var(--radius); box-shadow: 0 18px 56px rgba(0,0,0,.5);
     display: flex; flex-direction: column; max-height: calc(100vh - 32px);
     overflow: hidden;
   }
   .float-head {
-    display: flex; align-items: center; justify-content: space-between; gap: 10px;
-    padding: 12px 14px; border-bottom: 1px solid var(--line); flex: none;
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    padding: 10px 12px; border-bottom: 1px solid var(--line); flex: none;
     cursor: grab; user-select: none; touch-action: none;
   }
+  .float-head .main-tabs { flex: 1 1 auto; margin: 0; cursor: auto; }
   .float-head:active { cursor: grabbing; }
   .float-head.dragging { opacity: .85; }
-  .float-head h1 { font-size: 15px; margin: 0; letter-spacing: .02em; line-height: 1.3; }
-  .float-head p { margin: 2px 0 0; font-size: 11px; color: var(--fg-dim); }
   .float-actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; justify-content: flex-end; cursor: auto; }
   .float-body {
     overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 14px;
@@ -62,14 +61,6 @@
   .float-panel.collapsed .float-head { border-bottom: 0; }
   .collapse-btn { flex: none; }
   .drag-grip { flex: none; color: var(--fg-dim); font-size: 14px; line-height: 1; padding: 0 2px; }
-
-  /* ===== 色の関係ビジュアライゼーション（トーンマップ・色相環） ===== */
-  .viz-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-  @media (max-width: 460px) { .viz-grid { grid-template-columns: 1fr; } }
-  .viz { display: flex; flex-direction: column; gap: 6px; }
-  .viz-label { font-size: 11px; color: var(--fg-muted); font-weight: 700; letter-spacing: .04em; }
-  .viz svg { width: 100%; height: auto; display: block; border-radius: var(--radius-sm); }
-  .viz-caption { font-size: 10.5px; color: var(--fg-dim); line-height: 1.4; }
 
   /* ===== 汎用パーツ ===== */
   button, select, input { font-family: inherit; font-size: inherit; color: inherit; }
@@ -145,48 +136,85 @@
   }
 
   /* ===== トーンマップ（彩度 × 明度の二次元配置） ===== */
-  .tone-map {
-    display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; max-width: 620px;
+  /* ===== 色相環 × トーンマップ（PCCS の図をそのままコントロールにする） ===== */
+  /* 図 2 つと設定を横一列に並べ、パネルが縦に伸びないようにする */
+  .settings-grid {
+    display: grid; gap: 16px;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(210px, 0.85fr);
+    align-items: start;
   }
-  .tone-cell {
-    position: relative; border: 2px solid transparent; border-radius: var(--radius-sm);
-    padding: 0; cursor: pointer; aspect-ratio: 2.6 / 1; min-height: 40px; max-height: 58px;
-    display: flex; flex-direction: column; align-items: center; justify-content: center;
-    gap: 1px; overflow: hidden; background: #000;
+  @media (max-width: 900px) { .settings-grid { grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 560px) { .settings-grid { grid-template-columns: 1fr; } }
+  .settings-col { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+  .figure { min-width: 0; }
+  .figure-head {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 8px; margin-bottom: 7px; flex-wrap: wrap;
   }
-  .tone-cell .tone-abbr { font-family: var(--mono); font-size: 11px; font-weight: 700; }
-  .tone-cell .tone-name { font-size: 10.5px; line-height: 1.1; }
-  .tone-cell[aria-pressed="true"] { border-color: #fff; box-shadow: 0 0 0 2px rgba(0,0,0,.55); }
-  .tone-axis { font-size: 10.5px; color: var(--fg-dim); display: flex; justify-content: space-between; margin-top: 6px; max-width: 620px; }
+  .figure-tools { display: inline-flex; align-items: center; gap: 6px; }
+  .figure-stage {
+    position: relative; width: 100%;
+    background: var(--bg-elev-2); border: 1px solid var(--line);
+    border-radius: var(--radius); overflow: hidden;
+    touch-action: manipulation;
+  }
+  .wheel-stage { aspect-ratio: 1 / 1; }
+  .tone-stage { aspect-ratio: 1.06 / 1; }
+  .figure-svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .pins { position: absolute; inset: 0; z-index: 2; }
+  .dots-layer { z-index: 3; pointer-events: none; }
+
+  .pin {
+    position: absolute; transform: translate(-50%, -50%);
+    padding: 0; border: 0; border-radius: 50%; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--mono); font-weight: 700; line-height: 1;
+    box-shadow: 0 0 0 1px rgba(0,0,0,.45);
+    transition: width .12s, height .12s, box-shadow .12s;
+  }
+  .pin:hover { z-index: 4; box-shadow: 0 0 0 2px rgba(255,255,255,.85); }
+  .pin:focus-visible { outline: 2px solid #fff; outline-offset: 2px; z-index: 5; }
+
+  .hue-pin { width: 8.5%; height: 8.5%; font-size: 0; }
+  .hue-pin.used { width: 13.5%; height: 13.5%; font-size: 10px; z-index: 3; }
+  .hue-pin.current { box-shadow: 0 0 0 2px #fff, 0 0 0 4px rgba(0,0,0,.6); z-index: 4; }
+
+  .tone-pin { width: 15%; height: 15%; font-size: 10px; }
+  .tone-pin.current { box-shadow: 0 0 0 2.5px #e2473f, 0 0 0 4.5px rgba(0,0,0,.45); z-index: 4; }
+
+  .tone-axis { font-size: 10.5px; color: var(--fg-dim); display: flex; justify-content: space-between; margin-top: 6px; gap: 6px; }
 
   .row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
   @media (max-width: 620px) { .row-2 { grid-template-columns: 1fr; } }
 
   /* ===== パレット（横に広いカード） ===== */
-  .palette { display: grid; grid-template-columns: 1fr; gap: 10px; }
+  .palette { display: grid; grid-template-columns: repeat(auto-fill, minmax(296px, 1fr)); gap: 10px; }
   .card {
     background: var(--bg-elev); border: 1px solid var(--line);
     border-radius: var(--radius); overflow: hidden;
-    display: grid; grid-template-columns: 96px 1fr; align-items: stretch;
+    display: grid; grid-template-columns: 58px 1fr; align-items: stretch;
   }
   .card.locked { border-color: var(--line-strong); box-shadow: inset 0 0 0 1px var(--line-strong); }
   .swatch {
-    border: 0; width: 100%; height: 100%; min-height: 84px; cursor: pointer; display: block;
-    position: relative; padding: 0;
+    border: 0; width: 100%; height: 100%; min-height: 76px; cursor: pointer; display: block; padding: 0;
   }
-  .swatch::after {
-    content: "クリックでコピー"; position: absolute; inset: auto 0 8px 0;
-    font-size: 11px; opacity: 0; transition: opacity .15s; color: inherit;
-  }
-  .swatch:hover::after, .swatch:focus-visible::after { opacity: .8; }
   .card-body { padding: 9px 12px 11px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-  .card-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-  .hex { font-family: var(--mono); font-size: 14px; font-weight: 700; letter-spacing: .02em; }
+  .card-top { display: flex; align-items: center; gap: 6px; min-width: 0; }
+  .hex {
+    font-family: var(--mono); font-size: 14px; font-weight: 700; letter-spacing: .02em;
+    flex: 1 1 auto; min-width: 0;
+  }
   .tone-badge {
     font-size: 10.5px; color: var(--fg-muted); background: var(--bg-elev-2);
-    border: 1px solid var(--line); border-radius: 999px; padding: 1px 7px; white-space: nowrap;
+    border: 1px solid var(--line); border-radius: 999px; padding: 1px 7px;
+    white-space: nowrap; flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis;
   }
-  .meta { font-family: var(--mono); font-size: 11px; color: var(--fg-dim); line-height: 1.5; }
+  .lock-btn {
+    flex: none; width: 26px; height: 26px; padding: 0; line-height: 1;
+    background: var(--bg-elev-2); border: 1px solid var(--line-strong);
+    border-radius: var(--radius-sm); cursor: pointer; font-size: 12px;
+  }
+  .lock-btn[aria-pressed="true"] { border-color: var(--accent); background: #2f3a47; }
   .contrast { display: flex; flex-wrap: wrap; gap: 5px; }
   .cbadge {
     font-size: 10px; font-family: var(--mono); border-radius: 4px; padding: 2px 6px;
@@ -202,20 +230,10 @@
     font-size: 11px; color: var(--fg-dim); font-family: var(--mono);
   }
   .adjust input[type=range] { width: 100%; accent-color: var(--accent); margin: 0; }
-  .card-actions { display: flex; gap: 6px; }
-  .card-actions .btn { flex: 1; }
 
   /* ===== 折りたたみセクション（パレット・エクスポート・履歴） ===== */
-  .section-toggle {
-    display: flex; align-items: center; justify-content: space-between; gap: 10px;
-    width: 100%; background: transparent; border: 0; padding: 0; cursor: pointer;
-    font-size: 13px; text-transform: uppercase; letter-spacing: .08em;
-    color: var(--fg-muted); font-weight: 700; text-align: left;
-  }
-  .section-toggle .caret { font-size: 11px; color: var(--fg-dim); transition: transform .15s; }
-  .section-toggle[aria-expanded="true"] .caret { transform: rotate(90deg); }
-  .section-body { margin-top: 12px; }
-  .section-body[hidden] { display: none; }
+  .main-tabs { flex-wrap: wrap; }
+  .pane[hidden] { display: none; }
 
   /* ===== エクスポート ===== */
   .tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
@@ -254,11 +272,6 @@
   }
   .toast.show { opacity: 1; transform: translate(-50%, 0); }
 
-  .kbd {
-    font-family: var(--mono); font-size: 11px; background: var(--bg-elev-2);
-    border: 1px solid var(--line-strong); border-bottom-width: 2px;
-    border-radius: 4px; padding: 1px 6px; color: var(--fg-muted);
-  }
   .visually-hidden {
     position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
     overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
@@ -398,13 +411,16 @@
 
     <div class="float-head" id="float-head">
       <span class="drag-grip" aria-hidden="true">⠿</span>
-      <div>
-        <h1>Hue &amp; Tone Palette Playground</h1>
-        <p><span class="kbd">Space</span> でランダム生成</p>
+      <div class="tabs main-tabs" id="main-tabs" role="tablist" aria-label="表示の切り替え">
+        <button class="tab" type="button" role="tab" data-pane="settings">配色設定</button>
+        <button class="tab" type="button" role="tab" data-pane="palette">パレット</button>
+        <button class="tab" type="button" role="tab" data-pane="export">エクスポート</button>
+        <button class="tab" type="button" role="tab" data-pane="history">履歴</button>
       </div>
       <div class="float-actions">
-        <button class="btn primary small" id="btn-random" type="button">🎲 生成</button>
-        <button class="btn small" id="btn-share" type="button">🔗 共有</button>
+        <button class="btn primary small" id="btn-random" type="button"
+                title="ランダム生成（Space キー）">🎲 生成</button>
+        <button class="btn small" id="btn-share" type="button" title="共有URLをコピー">🔗 共有</button>
         <button class="btn small collapse-btn" id="btn-collapse" type="button"
                 aria-expanded="true" title="パネルを折りたたむ">−</button>
       </div>
@@ -412,24 +428,48 @@
 
     <div class="float-body" id="float-body">
 
-      <section class="panel" aria-labelledby="ttl-controls">
-        <h2 id="ttl-controls">配色設定</h2>
-
-        <div class="field">
-          <div class="field-head">
-            <span class="field-label">基準色相（Hue）</span>
-            <span>
-              <span class="field-value" id="hue-value">0°</span>
-              <label class="lock" title="ランダム生成で色相を変更しない">
-                <input type="checkbox" id="lock-hue"> 固定
-              </label>
-            </span>
+      <section class="panel">
+        <div class="pane" id="pane-settings" role="tabpanel">
+          <div class="settings-grid">
+          <div class="figure">
+            <div class="figure-head">
+              <span class="field-label">色相環</span>
+              <span class="figure-tools">
+                <span class="field-value" id="hue-value">0°</span>
+                <label class="lock" title="ランダム生成で色相を変更しない">
+                  <input type="checkbox" id="lock-hue"> 固定
+                </label>
+              </span>
+            </div>
+            <div class="figure-stage wheel-stage" id="wheel-stage">
+              <svg class="figure-svg" id="wheel-svg" viewBox="0 0 100 100"
+                   preserveAspectRatio="none" aria-hidden="true"></svg>
+              <div class="pins" id="hue-pins" role="group" aria-label="PCCS 24 色相"></div>
+            </div>
+            <input type="range" class="hue-slider" id="hue" min="0" max="360" step="1" value="0"
+                   aria-label="基準色相（0〜360度）">
           </div>
-          <input type="range" class="hue-slider" id="hue" min="0" max="360" step="1" value="0"
-                 aria-label="基準色相（0〜360度）">
-        </div>
 
-        <div class="row-2">
+          <div class="figure">
+            <div class="figure-head">
+              <span class="field-label">トーンマップ</span>
+              <span class="figure-tools">
+                <span class="field-value" id="tone-value"></span>
+                <label class="lock" title="ランダム生成でトーンを変更しない">
+                  <input type="checkbox" id="lock-tone"> 固定
+                </label>
+              </span>
+            </div>
+            <div class="figure-stage tone-stage" id="tone-stage">
+              <svg class="figure-svg" id="tone-svg" viewBox="0 0 100 100"
+                   preserveAspectRatio="none" aria-hidden="true"></svg>
+              <div class="pins" id="tone-pins" role="group" aria-label="トーン"></div>
+              <svg class="figure-svg dots-layer" id="tone-dots" viewBox="0 0 100 100"
+                   preserveAspectRatio="none" aria-hidden="true"></svg>
+            </div>
+            <div class="tone-axis"><span>← 低彩度</span><span>上：明るい／下：暗い</span><span>高彩度 →</span></div>
+          </div>
+            <div class="settings-col">
           <div class="field">
             <div class="field-head">
               <span class="field-label">配色ルール</span>
@@ -438,7 +478,6 @@
               </label>
             </div>
             <select id="rule" aria-label="配色ルール"></select>
-            <p class="meta" id="rule-desc" style="margin:7px 0 0"></p>
           </div>
 
           <div class="field">
@@ -448,52 +487,16 @@
             </div>
             <input type="range" id="count" min="2" max="6" step="1" value="5"
                    style="width:100%; accent-color: var(--accent);" aria-label="色数（2〜6）">
-            <p class="meta" style="margin:7px 0 0">2 〜 6 色</p>
+          </div>
+            </div>
           </div>
         </div>
 
-        <div class="field">
-          <div class="field-head">
-            <span class="field-label">トーン（彩度 × 明度）</span>
-            <span>
-              <span class="field-value" id="tone-value"></span>
-              <label class="lock" title="ランダム生成でトーンを変更しない">
-                <input type="checkbox" id="lock-tone"> 固定
-              </label>
-            </span>
-          </div>
-          <div class="tone-map" id="tone-map" role="group" aria-label="トーンマップ"></div>
-          <div class="tone-axis"><span>← 低彩度</span><span>上：明るい／下：暗い</span><span>高彩度 →</span></div>
-        </div>
-
-        <div class="viz-grid" style="margin-top:16px">
-          <div class="viz">
-            <span class="viz-label">トーンマップ</span>
-            <div id="tone-viz"></div>
-            <span class="viz-caption">彩度（横）× 明度（縦）に各色を配置</span>
-          </div>
-          <div class="viz">
-            <span class="viz-label">色相環</span>
-            <div id="wheel-viz"></div>
-            <span class="viz-caption">色相の位置関係を表示</span>
-          </div>
-        </div>
-      </section>
-
-      <section class="panel" aria-labelledby="toggle-palette">
-        <button class="section-toggle" id="toggle-palette" type="button" aria-expanded="false">
-          <span>パレット</span><span class="caret">▶</span>
-        </button>
-        <div class="section-body" id="palette-body" hidden>
+        <div class="pane" id="pane-palette" role="tabpanel" hidden>
           <div class="palette" id="palette"></div>
         </div>
-      </section>
 
-      <section class="panel" aria-labelledby="toggle-export">
-        <button class="section-toggle" id="toggle-export" type="button" aria-expanded="false">
-          <span>エクスポート</span><span class="caret">▶</span>
-        </button>
-        <div class="section-body" id="export-body" hidden>
+        <div class="pane" id="pane-export" role="tabpanel" hidden>
           <div class="tabs" id="export-tabs" role="tablist"></div>
           <pre class="code" id="export-code" tabindex="0"></pre>
           <div class="export-actions">
@@ -501,13 +504,8 @@
             <button class="btn ghost" id="btn-share-2" type="button">共有URLをコピー</button>
           </div>
         </div>
-      </section>
 
-      <section class="panel" aria-labelledby="toggle-history">
-        <button class="section-toggle" id="toggle-history" type="button" aria-expanded="false">
-          <span>履歴（直近 10 件）</span><span class="caret">▶</span>
-        </button>
-        <div class="section-body" id="history-body" hidden>
+        <div class="pane" id="pane-history" role="tabpanel" hidden>
           <div class="history" id="history"></div>
           <p class="empty" id="history-empty">まだ履歴はありません。</p>
         </div>
@@ -647,6 +645,37 @@
    * 3. トーン定義（彩度レンジ・明度レンジのテーブル。すべてここで一元管理）
    *    col / row はトーンマップ上の位置（col: 低彩度→高彩度, row: 明→暗）
    * ========================================================================= */
+  /* =========================================================================
+   * PCCS の 24 色相（色相環に並べる基準点）
+   * n は色相番号、code は記号、h は対応する HSL の色相
+   * ========================================================================= */
+  const PCCS_HUES = [
+    { n: 1,  code: "pR", jp: "紫みの赤", h: 345 },
+    { n: 2,  code: "R",  jp: "赤",       h: 358 },
+    { n: 3,  code: "yR", jp: "黄みの赤", h: 10 },
+    { n: 4,  code: "rO", jp: "赤みの橙", h: 18 },
+    { n: 5,  code: "O",  jp: "橙",       h: 26 },
+    { n: 6,  code: "yO", jp: "黄みの橙", h: 35 },
+    { n: 7,  code: "rY", jp: "赤みの黄", h: 44 },
+    { n: 8,  code: "Y",  jp: "黄",       h: 53 },
+    { n: 9,  code: "gY", jp: "緑みの黄", h: 62 },
+    { n: 10, code: "YG", jp: "黄緑",     h: 78 },
+    { n: 11, code: "yG", jp: "黄みの緑", h: 96 },
+    { n: 12, code: "G",  jp: "緑",       h: 125 },
+    { n: 13, code: "bG", jp: "青みの緑", h: 152 },
+    { n: 14, code: "BG", jp: "青緑",     h: 170 },
+    { n: 15, code: "BG", jp: "青緑",     h: 180 },
+    { n: 16, code: "gB", jp: "緑みの青", h: 190 },
+    { n: 17, code: "B",  jp: "青",       h: 200 },
+    { n: 18, code: "B",  jp: "青",       h: 210 },
+    { n: 19, code: "pB", jp: "紫みの青", h: 222 },
+    { n: 20, code: "V",  jp: "青紫",     h: 236 },
+    { n: 21, code: "bP", jp: "青みの紫", h: 258 },
+    { n: 22, code: "P",  jp: "紫",       h: 275 },
+    { n: 23, code: "rP", jp: "赤みの紫", h: 295 },
+    { n: 24, code: "RP", jp: "赤紫",     h: 320 },
+  ];
+
   const TONES = [
     { id: "pale",    name: "ペール",       abbr: "p",  s: [22, 34],  l: [84, 90], col: 2, row: 1 },
     { id: "light",   name: "ライト",       abbr: "lt", s: [44, 58],  l: [70, 78], col: 3, row: 2 },
@@ -659,8 +688,57 @@
     { id: "dark",    name: "ダーク",       abbr: "dk", s: [55, 70],  l: [20, 28], col: 2, row: 5 },
     { id: "deep",    name: "ディープ",     abbr: "dp", s: [82, 96],  l: [28, 36], col: 4, row: 5 },
   ];
-  const TONE_MAP_COLS = 4;
-  const TONE_MAP_ROWS = 5;
+
+  /** PCCS の色相番号 → HSL の色相 */
+  const pccsToHue = (n) => (PCCS_HUES.find((x) => x.n === n) || PCCS_HUES[0]).h;
+
+  /**
+   * HSL の色相 → 色相環上の位置（PCCS の並びに合わせた 1〜25 の連続値）。
+   * PCCS の色相は等間隔ではないため、隣り合う基準色相の間を補間する。
+   */
+  function hueToPccsPos(h) {
+    h = normalizeHue(h);
+    for (let i = 0; i < PCCS_HUES.length; i++) {
+      const a = PCCS_HUES[i], b = PCCS_HUES[(i + 1) % PCCS_HUES.length];
+      const span = normalizeHue(b.h - a.h) || 360;
+      const d = normalizeHue(h - a.h);
+      if (d < span) return a.n + d / span;
+    }
+    return 8;
+  }
+
+  /** 色相環の角度（PCCS 8:Y を真上に置き、時計回りに 24 等分） */
+  const hueToAngle = (h) => (hueToPccsPos(h) - 8) * 15 - 90;
+  const pccsAngle = (n) => (n - 8) * 15 - 90;
+  const toRad = (deg) => (deg * Math.PI) / 180;
+
+  /** 色相環の半径と、トーンマップの描画範囲（いずれもステージに対する %） */
+  const WHEEL_R = 39;
+  const TONE_PLOT = { x: [8, 82], y: [10, 88] };
+  const TONE_COLS = 4;  // 左ほど低彩度
+  const TONE_ROWS = 5;  // 上ほど明るい
+
+  /** トーンマップの升目（列＝彩度、行＝明度）の中心座標 */
+  const cellX = (col) => TONE_PLOT.x[0] + ((col - 0.5) / TONE_COLS) * (TONE_PLOT.x[1] - TONE_PLOT.x[0]);
+  const cellY = (row) => TONE_PLOT.y[0] + ((row - 0.5) / TONE_ROWS) * (TONE_PLOT.y[1] - TONE_PLOT.y[0]);
+  const cellW = (TONE_PLOT.x[1] - TONE_PLOT.x[0]) / TONE_COLS;
+  const cellH = (TONE_PLOT.y[1] - TONE_PLOT.y[0]) / TONE_ROWS;
+
+  /**
+   * 色をトーンマップ上の座標に置く。まず属するトーンの升目に置き、
+   * トーンの中心からのずれぶんだけ升目の中で動かす（微調整が見えるようにする）。
+   */
+  function colorToTonePos(sat, lig) {
+    const tone = classifyTone(sat, lig).tone;
+    const c = toneCenter(tone);
+    const dx = clamp((sat - c.s) / Math.max(1, tone.s[1] - tone.s[0]), -0.5, 0.5);
+    const dy = clamp((c.l - lig) / Math.max(1, tone.l[1] - tone.l[0]), -0.5, 0.5);
+    return { x: cellX(tone.col) + dx * cellW * 0.88, y: cellY(tone.row) + dy * cellH * 0.88 };
+  }
+
+  /** 2 つの色相の差（0〜180） */
+  const hueGap = (a, b) => { const d = Math.abs(normalizeHue(a) - normalizeHue(b)); return Math.min(d, 360 - d); };
+
 
   // トーンオントーン（同一色相・トーン違い）で使う、明度順のトーン梯子
   const TONE_LADDER = ["pale", "light", "soft", "dull", "strong", "deep", "dark"];
@@ -793,6 +871,7 @@
     lockRule: false,
     cards: [],       // { h, s, l, locked }
     exportTab: "hex",
+    mainPane: "settings",  // 配色設定 / パレット / エクスポート / 履歴のどれを表示しているか
     history: [],     // 直近の生成結果（メモリ上）
   };
 
@@ -951,19 +1030,23 @@
   const $ = (id) => document.getElementById(id);
   const el = {
     hue: $("hue"), hueValue: $("hue-value"), lockHue: $("lock-hue"),
-    rule: $("rule"), ruleDesc: $("rule-desc"), lockRule: $("lock-rule"),
+    rule: $("rule"), lockRule: $("lock-rule"),
     count: $("count"), countValue: $("count-value"),
-    toneMap: $("tone-map"), toneValue: $("tone-value"), lockTone: $("lock-tone"),
+    toneValue: $("tone-value"), lockTone: $("lock-tone"),
+    wheelStage: $("wheel-stage"), wheelSvg: $("wheel-svg"), huePins: $("hue-pins"),
+    toneStage: $("tone-stage"), toneSvg: $("tone-svg"), tonePins: $("tone-pins"),
+    toneDots: $("tone-dots"),
     palette: $("palette"), site: $("site"),
     exportTabs: $("export-tabs"), exportCode: $("export-code"),
     history: $("history"), historyEmpty: $("history-empty"),
     toast: $("toast"),
     floatPanel: $("float-panel"), floatBody: $("float-body"), btnCollapse: $("btn-collapse"),
     floatHead: $("float-head"),
-    toneViz: $("tone-viz"), wheelViz: $("wheel-viz"),
-    togglePalette: $("toggle-palette"), paletteBody: $("palette-body"),
-    toggleExport: $("toggle-export"), exportBody: $("export-body"),
-    toggleHistory: $("toggle-history"), historyBody: $("history-body"),
+    mainTabs: $("main-tabs"),
+    panes: {
+      settings: $("pane-settings"), palette: $("pane-palette"),
+      export: $("pane-export"), history: $("pane-history"),
+    },
   };
 
   /* =========================================================================
@@ -1236,159 +1319,149 @@
   }
 
   /* =========================================================================
-   * 13.5 色の関係ビジュアライゼーション（トーンマップ・色相環）
-   *      現在のパレットの全色を、トーンマップ（彩度×明度）と色相環に
-   *      プロットして、色同士の関係を視覚的に把握できるようにする。
+   * 13.5 色相環とトーンマップ
+   *      PCCS の 2 つの図をそのままコントロールにする。色相環の丸は 24 色相、
+   *      トーンマップの丸は各トーンの位置で、どちらもクリックで選べる。
+   *      現在のパレットは、色相環では中心から伸びる線、トーンマップでは
+   *      小さな点として重ねて表示する。
    * ========================================================================= */
-  const VIZ_W = 460;
-  const VIZ_H = 300;
-  const VIZ_PAD = 16;
+  const SVG_NS = "http://www.w3.org/2000/svg";
+  const svgEl = (name, attrs) => {
+    const node = document.createElementNS(SVG_NS, name);
+    for (const [k, v] of Object.entries(attrs)) node.setAttribute(k, String(v));
+    return node;
+  };
 
-  /** トーンマップ：背景にトーン領域を現在の色相で塗り、各色を点でプロット */
-  function renderToneViz() {
-    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-    svg.setAttribute("viewBox", `0 0 ${VIZ_W} ${VIZ_H}`);
-    svg.setAttribute("role", "img");
-    svg.setAttribute("aria-label", "トーンマップ上の現在の配色");
-
-    const plotW = VIZ_W - VIZ_PAD * 2;
-    const plotH = VIZ_H - VIZ_PAD * 2;
-    const x = (s) => VIZ_PAD + (s / 100) * plotW;
-    const y = (l) => VIZ_PAD + (1 - l / 100) * plotH;
-
-    // 背景：トーン領域を現在の基準色相で塗る（デジタルならではの「色をつける」表現）
-    for (const tone of TONES) {
-      const c = toneColor(state.baseHue, tone, 0);
-      const hex = hslToHex(c.h, c.s, c.l);
-      const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-      rect.setAttribute("x", x(tone.s[0]));
-      rect.setAttribute("y", y(tone.l[1]));
-      rect.setAttribute("width", x(tone.s[1]) - x(tone.s[0]));
-      rect.setAttribute("height", y(tone.l[0]) - y(tone.l[1]));
-      rect.setAttribute("fill", hex);
-      rect.setAttribute("opacity", "0.55");
-      rect.setAttribute("stroke", "rgba(0,0,0,.25)");
-      rect.setAttribute("stroke-width", "0.5");
-      svg.appendChild(rect);
-    }
-
-    // 軸ラベル
-    const label = (text, tx, ty, anchor) => {
-      const t = document.createElementNS("http://www.w3.org/2000/svg", "text");
-      t.setAttribute("x", tx); t.setAttribute("y", ty);
-      t.setAttribute("text-anchor", anchor || "middle");
-      t.setAttribute("font-size", "9");
-      t.setAttribute("fill", "rgba(255,255,255,.7)");
-      t.textContent = text;
-      svg.appendChild(t);
-    };
-    label("低彩度", VIZ_PAD, VIZ_H - 2, "start");
-    label("高彩度", VIZ_W - VIZ_PAD, VIZ_H - 2, "end");
-    label("明るい", VIZ_W - 2, VIZ_PAD + 4, "end");
-    label("暗い", VIZ_W - 2, VIZ_H - VIZ_PAD, "end");
-
-    // 各パレット色を点でプロット
-    state.cards.forEach((card, i) => {
-      const hex = cardHex(card);
-      const cx = x(card.s), cy = y(card.l);
-      const ring = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-      ring.setAttribute("cx", cx); ring.setAttribute("cy", cy);
-      ring.setAttribute("r", "7");
-      ring.setAttribute("fill", "none");
-      ring.setAttribute("stroke", "#fff");
-      ring.setAttribute("stroke-width", "2");
-      svg.appendChild(ring);
-      const dot = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-      dot.setAttribute("cx", cx); dot.setAttribute("cy", cy);
-      dot.setAttribute("r", "4.5");
-      dot.setAttribute("fill", hex);
-      dot.setAttribute("stroke", "rgba(0,0,0,.5)");
-      dot.setAttribute("stroke-width", "1");
-      svg.appendChild(dot);
-      const num = document.createElementNS("http://www.w3.org/2000/svg", "text");
-      num.setAttribute("x", cx); num.setAttribute("y", cy - 9);
-      num.setAttribute("text-anchor", "middle");
-      num.setAttribute("font-size", "9");
-      num.setAttribute("font-weight", "700");
-      num.setAttribute("fill", "#fff");
-      num.setAttribute("stroke", "rgba(0,0,0,.6)");
-      num.setAttribute("stroke-width", "2.5");
-      num.setAttribute("paint-order", "stroke");
-      num.textContent = String(i + 1);
-      svg.appendChild(num);
+  /** 図のうち、位置が変わらない部分（ピンとトーンマップの外形）を一度だけ作る */
+  function buildFigures() {
+    PCCS_HUES.forEach((hue) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "pin hue-pin";
+      b.dataset.hue = String(hue.n);
+      b.style.left = (50 + Math.cos(toRad(pccsAngle(hue.n))) * WHEEL_R) + "%";
+      b.style.top = (50 + Math.sin(toRad(pccsAngle(hue.n))) * WHEEL_R) + "%";
+      b.title = `${hue.n}:${hue.code}（${hue.jp}）`;
+      b.setAttribute("aria-label", `色相 ${hue.n} ${hue.jp}`);
+      el.huePins.appendChild(b);
     });
 
-    el.toneViz.innerHTML = "";
-    el.toneViz.appendChild(svg);
+    TONES.forEach((tone) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "pin tone-pin";
+      b.dataset.tone = tone.id;
+      b.style.left = cellX(tone.col) + "%";
+      b.style.top = cellY(tone.row) + "%";
+      b.textContent = tone.abbr;
+      b.title = `${tone.name}（S ${tone.s[0]}–${tone.s[1]}% / L ${tone.l[0]}–${tone.l[1]}%）`;
+      b.setAttribute("aria-label", `トーン ${tone.name}`);
+      el.tonePins.appendChild(b);
+    });
   }
 
-  /** 色相環：色相を円環状に配置し、各色をその色相角にプロット */
-  function renderWheelViz() {
-    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-    svg.setAttribute("viewBox", `0 0 ${VIZ_W} ${VIZ_H}`);
-    svg.setAttribute("role", "img");
-    svg.setAttribute("aria-label", "色相環上の現在の配色");
+  /** 色相環：リングの下地と、パレットが使っている色相への線を描く */
+  function drawWheelSvg() {
+    const svg = el.wheelSvg;
+    svg.innerHTML = "";
+    svg.appendChild(svgEl("circle", {
+      cx: 50, cy: 50, r: WHEEL_R,
+      fill: "none", stroke: "rgba(255,255,255,.10)", "stroke-width": 1,
+      "vector-effect": "non-scaling-stroke",
+    }));
 
-    const cx = VIZ_W / 2, cy = VIZ_H / 2;
-    const rOuter = Math.min(VIZ_W, VIZ_H) / 2 - VIZ_PAD;
-    const rInner = rOuter * 0.42;
-    const segs = 36;
-
-    // 色相環のセグメント（円環を色相で塗る）
-    for (let i = 0; i < segs; i++) {
-      const a0 = (i / segs) * 360 - 90;
-      const a1 = ((i + 1) / segs) * 360 - 90;
-      const large = a1 - a0 > 180 ? 1 : 0;
-      const p0 = [cx + rOuter * Math.cos((a0 * Math.PI) / 180), cy + rOuter * Math.sin((a0 * Math.PI) / 180)];
-      const p1 = [cx + rOuter * Math.cos((a1 * Math.PI) / 180), cy + rOuter * Math.sin((a1 * Math.PI) / 180)];
-      const p2 = [cx + rInner * Math.cos((a1 * Math.PI) / 180), cy + rInner * Math.sin((a1 * Math.PI) / 180)];
-      const p3 = [cx + rInner * Math.cos((a0 * Math.PI) / 180), cy + rInner * Math.sin((a0 * Math.PI) / 180)];
-      const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-      path.setAttribute("d",
-        `M ${p0[0]} ${p0[1]} A ${rOuter} ${rOuter} 0 ${large} 1 ${p1[0]} ${p1[1]} ` +
-        `L ${p2[0]} ${p2[1]} A ${rInner} ${rInner} 0 ${large} 0 ${p3[0]} ${p3[1]} Z`);
-      path.setAttribute("fill", hslToHex((i / segs) * 360, 90, 55));
-      path.setAttribute("stroke", "rgba(0,0,0,.25)");
-      path.setAttribute("stroke-width", "0.5");
-      svg.appendChild(path);
-    }
-
-    // 各パレット色をその色相角にプロット（彩度で半径を変える）
-    state.cards.forEach((card, i) => {
-      const hex = cardHex(card);
-      const ang = (card.h - 90) * (Math.PI / 180);
-      const r = rInner + (card.s / 100) * (rOuter - rInner);
-      const px = cx + r * Math.cos(ang);
-      const py = cy + r * Math.sin(ang);
-      const ring = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-      ring.setAttribute("cx", px); ring.setAttribute("cy", py);
-      ring.setAttribute("r", "7");
-      ring.setAttribute("fill", "none");
-      ring.setAttribute("stroke", "#fff");
-      ring.setAttribute("stroke-width", "2");
-      svg.appendChild(ring);
-      const dot = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-      dot.setAttribute("cx", px); dot.setAttribute("cy", py);
-      dot.setAttribute("r", "4.5");
-      dot.setAttribute("fill", hex);
-      dot.setAttribute("stroke", "rgba(0,0,0,.5)");
-      dot.setAttribute("stroke-width", "1");
-      svg.appendChild(dot);
-      const num = document.createElementNS("http://www.w3.org/2000/svg", "text");
-      num.setAttribute("x", px); num.setAttribute("y", py - 9);
-      num.setAttribute("text-anchor", "middle");
-      num.setAttribute("font-size", "9");
-      num.setAttribute("font-weight", "700");
-      num.setAttribute("fill", "#fff");
-      num.setAttribute("stroke", "rgba(0,0,0,.6)");
-      num.setAttribute("stroke-width", "2.5");
-      num.setAttribute("paint-order", "stroke");
-      num.textContent = String(i + 1);
-      svg.appendChild(num);
+    // 中心から、パレットの各色の色相へ線を引く
+    state.cards.forEach((card) => {
+      const rad = toRad(hueToAngle(card.h));
+      svg.appendChild(svgEl("line", {
+        x1: 50, y1: 50,
+        x2: 50 + Math.cos(rad) * WHEEL_R, y2: 50 + Math.sin(rad) * WHEEL_R,
+        stroke: cardHex(card), "stroke-width": 2.5, "stroke-linecap": "round",
+        "vector-effect": "non-scaling-stroke",
+      }));
     });
 
-    el.wheelViz.innerHTML = "";
-    el.wheelViz.appendChild(svg);
+    // 中心（線の集まる点）は基準色
+    const base = toneColor(state.baseHue, getTone(state.toneId), 0);
+    svg.appendChild(svgEl("circle", {
+      cx: 50, cy: 50, r: 4,
+      fill: hslToHex(base.h, base.s, base.l),
+      stroke: "rgba(255,255,255,.85)", "stroke-width": 1.5,
+      "vector-effect": "non-scaling-stroke",
+    }));
+  }
+
+  /** トーンマップ：外形と、パレットの各色の位置を描く */
+  function drawToneSvg() {
+    const svg = el.toneSvg;
+    svg.innerHTML = "";
+
+    // PCCS のトーンマップを思わせる外形（左は垂直、右へふくらむ D 字）
+    const [x0, x1] = TONE_PLOT.x, [y0, y1] = TONE_PLOT.y;
+    const left = x0 - 4, top = y0 - 5, bottom = y1 + 7;
+    const yc = (top + bottom) / 2;
+    const straight = x0 + (x1 - x0) * 0.57;  // 上下の直線部分が終わる位置
+    const far = x1 + 12;                     // ふくらみの先端
+    svg.appendChild(svgEl("path", {
+      d: `M ${left} ${top} L ${straight} ${top} Q ${far} ${top} ${far} ${yc}`
+        + ` Q ${far} ${bottom} ${straight} ${bottom} L ${left} ${bottom} Z`,
+      fill: "rgba(255,255,255,.04)", stroke: "rgba(255,255,255,.18)", "stroke-width": 1,
+      "vector-effect": "non-scaling-stroke",
+    }));
+
+    // パレットの各色を、属するトーンの升目に点で重ねる（ピンより前面のレイヤー）
+    const dots = el.toneDots;
+    dots.innerHTML = "";
+    state.cards.forEach((card) => {
+      const p = colorToTonePos(card.s, card.l);
+      dots.appendChild(svgEl("circle", {
+        cx: p.x, cy: p.y, r: 1.9,
+        fill: cardHex(card), stroke: "rgba(0,0,0,.7)", "stroke-width": 3,
+        "vector-effect": "non-scaling-stroke",
+      }));
+      dots.appendChild(svgEl("circle", {
+        cx: p.x, cy: p.y, r: 1.9,
+        fill: "none", stroke: "#fff", "stroke-width": 1.2,
+        "vector-effect": "non-scaling-stroke",
+      }));
+    });
+  }
+
+  /** ピンの色と選択状態を、現在の色相・トーンに合わせて更新する */
+  function updatePins() {
+    const tone = getTone(state.toneId);
+    const usedHues = state.cards.map((c) => c.h);
+
+    for (const b of el.huePins.children) {
+      const n = Number(b.dataset.hue);
+      const hue = pccsToHue(n);
+      const c = toneColor(hue, tone, 0);
+      const hex = hslToHex(c.h, c.s, c.l);
+      const used = usedHues.some((h) => hueGap(h, hue) < 7.5);
+      const current = hueGap(state.baseHue, hue) < 7.5;
+      b.style.background = hex;
+      b.style.color = bestTextOn(hex);
+      b.textContent = used ? String(n) : "";
+      b.classList.toggle("used", used);
+      b.classList.toggle("current", current);
+      b.setAttribute("aria-pressed", String(current));
+    }
+
+    for (const b of el.tonePins.children) {
+      const t = getTone(b.dataset.tone);
+      const c = toneColor(state.baseHue, t, 0);
+      const hex = hslToHex(c.h, c.s, c.l);
+      b.style.background = hex;
+      b.style.color = bestTextOn(hex);
+      b.classList.toggle("current", t.id === state.toneId);
+      b.setAttribute("aria-pressed", String(t.id === state.toneId));
+    }
+  }
+
+  function renderFigures() {
+    drawWheelSvg();
+    drawToneSvg();
+    updatePins();
   }
 
   /* =========================================================================
@@ -1400,21 +1473,10 @@
     el.count.value = String(state.count);
     el.countValue.textContent = state.count + " 色";
     el.rule.value = state.ruleId;
-    el.ruleDesc.textContent = getRule(state.ruleId).desc;
     el.toneValue.textContent = getTone(state.toneId).name;
     el.lockHue.checked = state.lockHue;
     el.lockTone.checked = state.lockTone;
     el.lockRule.checked = state.lockRule;
-
-    // トーンマップのスウォッチは現在の基準色相で描く
-    for (const btn of el.toneMap.children) {
-      const tone = getTone(btn.dataset.tone);
-      const c = toneColor(state.baseHue, tone, 0);
-      const hex = hslToHex(c.h, c.s, c.l);
-      btn.style.background = hex;
-      btn.style.color = bestTextOn(hex);
-      btn.setAttribute("aria-pressed", String(tone.id === state.toneId));
-    }
   }
 
   /** カードの骨組みを作る（値の入る部分は updateCard が埋める） */
@@ -1429,8 +1491,8 @@
           <div class="card-top">
             <span class="hex"></span>
             <span class="tone-badge"></span>
+            <button class="lock-btn" type="button" data-act="toggle-lock" data-index="${index}"></button>
           </div>
-          <div class="meta"></div>
           <div class="contrast">
             <span class="cbadge" title="白文字とのコントラスト比"></span>
             <span class="cbadge" title="黒文字とのコントラスト比"></span>
@@ -1444,9 +1506,6 @@
               <input type="range" min="0" max="100" step="1"
                      data-act="adjust-l" data-index="${index}" aria-label="明度を調整">
               <span class="adjust-value"></span></label>
-          </div>
-          <div class="card-actions">
-            <button class="btn small" data-act="toggle-lock" data-index="${index}"></button>
           </div>
         </div>`;
       el.palette.appendChild(node);
@@ -1474,7 +1533,6 @@
 
     node.querySelector(".hex").textContent = d.hex.toUpperCase();
     node.querySelector(".tone-badge").textContent = d.toneLabel;
-    node.querySelector(".meta").textContent = d.hsl;
 
     const badges = node.querySelectorAll(".cbadge");
     badges[0].className = `cbadge ${lw.cls}`;
@@ -1492,7 +1550,9 @@
 
     const lock = node.querySelector("[data-act='toggle-lock']");
     lock.setAttribute("aria-pressed", String(card.locked));
-    lock.textContent = card.locked ? "🔒 ロック中" : "🔓 ロック";
+    lock.textContent = card.locked ? "🔒" : "🔓";
+    lock.title = card.locked ? "ロック中（ランダム生成で変えない）" : "この色をロックする";
+    lock.setAttribute("aria-label", lock.title);
   }
 
   function renderPalette() {
@@ -1537,10 +1597,20 @@
     });
   }
 
+  /** パレット・エクスポート・履歴のタブの表示を切り替える */
+  function renderMainTabs() {
+    for (const btn of el.mainTabs.children) {
+      btn.setAttribute("aria-selected", String(btn.dataset.pane === state.mainPane));
+    }
+    for (const [name, pane] of Object.entries(el.panes)) {
+      pane.hidden = name !== state.mainPane;
+    }
+  }
+
   function render() {
     renderControls();
-    renderToneViz();
-    renderWheelViz();
+    renderMainTabs();
+    renderFigures();
     renderPalette();
     renderSite();
     renderExportTabs();
@@ -1551,23 +1621,6 @@
   /* =========================================================================
    * 15. 初期化とイベント
    * ========================================================================= */
-  function buildToneMap() {
-    el.toneMap.style.gridTemplateRows = `repeat(${TONE_MAP_ROWS}, auto)`;
-    TONES.forEach((tone) => {
-      const b = document.createElement("button");
-      b.type = "button";
-      b.className = "tone-cell";
-      b.dataset.tone = tone.id;
-      b.style.gridColumn = String(tone.col);
-      b.style.gridRow = String(tone.row);
-      b.title = `${tone.name}（S ${tone.s[0]}–${tone.s[1]}% / L ${tone.l[0]}–${tone.l[1]}%）`;
-      b.innerHTML = `<span class="tone-abbr">${tone.abbr}</span><span class="tone-name">${tone.name}</span>`;
-      el.toneMap.appendChild(b);
-    });
-    // 列見出し用に、空セルがあってもレイアウトが崩れないよう最小列数を確保
-    el.toneMap.style.gridTemplateColumns = `repeat(${TONE_MAP_COLS}, 1fr)`;
-  }
-
   function buildRuleSelect() {
     RULES.forEach((rule) => {
       const o = document.createElement("option");
@@ -1626,17 +1679,13 @@
     el.floatHead.addEventListener("pointerup", endDrag);
     el.floatHead.addEventListener("pointercancel", endDrag);
 
-    // 折りたたみセクション（パレット・エクスポート・履歴）
-    const bindSectionToggle = (btn, body) => {
-      btn.addEventListener("click", () => {
-        const expanded = btn.getAttribute("aria-expanded") === "true";
-        btn.setAttribute("aria-expanded", String(!expanded));
-        body.hidden = expanded;
-      });
-    };
-    bindSectionToggle(el.togglePalette, el.paletteBody);
-    bindSectionToggle(el.toggleExport, el.exportBody);
-    bindSectionToggle(el.toggleHistory, el.historyBody);
+    // パレット・エクスポート・履歴のタブ
+    el.mainTabs.addEventListener("click", (e) => {
+      const btn = e.target.closest(".tab");
+      if (!btn) return;
+      state.mainPane = btn.dataset.pane;
+      renderMainTabs();
+    });
 
     // 色相スライダー：ドラッグ中は履歴に積まず、確定時のみ記録する
     el.hue.addEventListener("input", (e) => {
@@ -1657,8 +1706,16 @@
     el.lockTone.addEventListener("change", (e) => { state.lockTone = e.target.checked; });
     el.lockRule.addEventListener("change", (e) => { state.lockRule = e.target.checked; });
 
-    el.toneMap.addEventListener("click", (e) => {
-      const btn = e.target.closest(".tone-cell");
+    // 図のピンをクリックして色相・トーンを選ぶ
+    el.huePins.addEventListener("click", (e) => {
+      const btn = e.target.closest(".hue-pin");
+      if (!btn) return;
+      state.baseHue = pccsToHue(Number(btn.dataset.hue));
+      onSettingChange();
+    });
+
+    el.tonePins.addEventListener("click", (e) => {
+      const btn = e.target.closest(".tone-pin");
       if (!btn) return;
       state.toneId = btn.dataset.tone;
       onSettingChange();
@@ -1694,8 +1751,7 @@
       else if (target.dataset.act === "adjust-l") state.cards[index].l = value;
       else return;
       updateCard(index);
-      renderToneViz();
-      renderWheelViz();
+      renderFigures();
       renderSite();
       renderExportTabs();
     });
@@ -1717,7 +1773,7 @@
   }
 
   function init() {
-    buildToneMap();
+    buildFigures();
     buildRuleSelect();
     bindEvents();
     applyQuery();
